@@ -22,21 +22,20 @@ app = Flask(__name__)
 FLASK_ENV = os.getenv('FLASK_ENV', 'development')
 FLASK_DEBUG = os.getenv('FLASK_DEBUG', 'True').lower() == 'true'
 # Update your CORS configuration
-if FLASK_ENV == "production":
-    CORS(app, resources={r"/api/*": {"origins": [
-        "http://127.0.0.1:5500",
-        "http://localhost:5173",
-        "http://127.0.0.1:5173",
-        "https://health-development.netlify.app"
-    ]}}, 
-    supports_credentials=True, 
+CORS(
+    app,
+    resources={r"/api/*": {
+        "origins": [
+            "http://127.0.0.1:5500",       # Local static server (e.g. VSCode Live Server)
+            "http://localhost:5173",       # Vite/React dev server
+            "http://127.0.0.1:5173",       # Alternate localhost
+            "https://health-development.netlify.app"  # Production frontend
+        ]
+    }},
+    supports_credentials=True,
     allow_headers=["Content-Type", "Authorization"],
-    methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"])
-else:
-    CORS(app, 
-         supports_credentials=True, 
-         allow_headers=["Content-Type", "Authorization"],
-         methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"])
+    methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"]
+)
 
 # Supabase config
 SUPABASE_URL = os.getenv('SUPABASE_URL')
