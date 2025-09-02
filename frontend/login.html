@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>HealthGuide Login</title>
+  <link rel="stylesheet" href="css/auth.css">
+</head>
+<body class="login">
+
+  <div class="container">
+    <div class="logo">
+      <h1>HealthGuide</h1>
+      <p>Community Health Platform</p>
+    </div>
+    
+    <h2>Welcome Back</h2>
+    
+    <form id="login-form">
+      <div class="form-group">
+        <label for="login-email">Email Address</label>
+        <input 
+          type="email" 
+          id="login-email" 
+          placeholder="Enter your email"
+          required 
+          autocomplete="email"
+        />
+      </div>
+      
+      <div class="form-group">
+        <label for="login-password">Password</label>
+        <div class="input-wrapper">
+          <input 
+            type="password" 
+            id="login-password" 
+            placeholder="Enter your password"
+            required 
+            autocomplete="current-password"
+          />
+          <button 
+            type="button" 
+            id="password-toggle" 
+            class="password-toggle"
+            tabindex="-1"
+          >👁️</button>
+        </div>
+      </div>
+      
+      <div id="error-message" class="error-message"></div>
+      <div id="success-message" class="success-message"></div>
+      
+      <button type="submit" id="login-submit" class="btn">
+        Login
+      </button>
+    </form>
+    
+    <div class="form-footer">
+      <p>Don't have an account?</p>
+      <a href="signup.html" class="btn btn-secondary">Create Account</a>
+    </div>
+  </div>
+</body>
+<script type="module" src="login.js"></script>
+
+</html>

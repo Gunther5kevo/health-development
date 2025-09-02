@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>HealthGuide Community</title>
+    <link rel="stylesheet" href="css/styles.css" />
+  </head>
+  <body>
+    <div class="container">
+      <!-- Header -->
+      <div class="header">
+        <h1>HealthGuide Community</h1>
+        <p>Empowering Community Health Workers</p>
+        <div class="header-buttons" id="auth-buttons">
+          <!-- Auth buttons will be dynamically updated by JavaScript -->
+        </div>
+      </div>
+
+      <!-- Navigation -->
+      <div class="nav-tabs">
+        <button class="nav-tab active" data-section="dashboard">
+          Dashboard
+        </button>
+        <button class="nav-tab" data-section="training">Training</button>
+        <button class="nav-tab" data-section="ai-assistant">AI Help</button>
+        <button class="nav-tab" data-section="community">Community</button>
+        <button class="nav-tab" data-section="subscription">Subscription</button>
+      </div>
+
+      <!-- Content -->
+      <div class="content">
+        <!-- Dashboard Section -->
+        <div id="dashboard" class="section active">
+          <div class="stats-grid">
+            <div class="stat-card">
+              <div class="stat-number">5</div>
+              <div class="stat-label">Modules Completed</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-number">85%</div>
+              <div class="stat-label">Progress</div>
+            </div>
+          </div>
+
+          <div class="card">
+            <h3>Welcome Back!</h3>
+            <p>
+              Continue your health worker training journey. You're doing great!
+            </p>
+            <div class="progress-bar">
+              <div class="progress-fill" style="width: 85%"></div>
+            </div>
+            <button class="btn">Continue Learning</button>
+          </div>
+
+          <div class="card">
+            <h3>Quick Actions</h3>
+            <button class="btn btn-secondary">Emergency Protocols</button>
+            <button class="btn">Ask AI Assistant</button>
+          </div>
+        </div>
+
+        <!-- Training Section -->
+        <div id="training" class="section">
+          <div class="card">
+            <h3>Basic Health Assessment</h3>
+            <p>
+              Learn fundamental health screening techniques for your community.
+            </p>
+            <div class="progress-bar">
+              <div class="progress-fill" style="width: 100%"></div>
+            </div>
+            <button class="btn">✓ Completed</button>
+          </div>
+
+          <div class="card">
+            <h3>First Aid Essentials</h3>
+            <p>
+              Essential first aid skills every community health worker should
+              know.
+            </p>
+            <div class="progress-bar">
+              <div class="progress-fill" style="width: 60%"></div>
+            </div>
+            <button class="btn">Continue Module</button>
+          </div>
+
+          <div class="card">
+            <h3>Maternal Health Care</h3>
+            <p>Supporting mothers and newborns in your community.</p>
+            <div class="progress-bar">
+              <div class="progress-fill" style="width: 0%"></div>
+            </div>
+            <button class="btn">Start Module</button>
+          </div>
+
+          <div class="card">
+            <h3>Child Nutrition</h3>
+            <p>Understanding malnutrition signs and intervention strategies.</p>
+            <div class="progress-bar">
+              <div class="progress-fill" style="width: 0%"></div>
+            </div>
+            <button class="btn">Start Module</button>
+          </div>
+        </div>
+
+        <!-- Module View (hidden placeholder for opened module) -->
+        <div id="module-view" class="section" hidden></div>
+
+        <!-- AI Assistant Section -->
+        <div id="ai-assistant" class="section">
+          <div class="card">
+            <h3>AI Health Assistant</h3>
+            <p>Get instant answers to health-related questions and guidance.</p>
+
+            <div class="chat-preview">
+              <div class="chat-message">
+                What should I do for someone with a fever?
+              </div>
+              <div class="chat-response">
+                For fever management: Check temperature, ensure hydration,
+                provide rest in cool environment. Seek medical help if fever
+                exceeds 38.5°C or lasts more than 3 days.
+              </div>
+            </div>
+
+            <button class="btn">Start Chat with AI</button>
+          </div>
+
+          <div class="card">
+            <h3>Symptom Checker</h3>
+            <p>
+              AI-powered tool to help assess common symptoms and provide
+              guidance.
+            </p>
+            <button class="btn btn-secondary">Open Symptom Checker</button>
+          </div>
+
+          <div class="card">
+            <h3>Drug Interaction Checker</h3>
+            <p>Check for potential interactions between medications.</p>
+            <button class="btn">Check Interactions</button>
+          </div>
+        </div>
+
+        <!-- Community Section -->
+        <div id="community" class="section">
+          <div class="card">
+            <h3>Discussion Forum</h3>
+            <p>
+              Connect with other health workers, share experiences, and learn
+              together.
+            </p>
+            <div class="forum-stats">
+              <small>🔥 24 active discussions • 156 members online</small>
+            </div>
+            <button class="btn">Join Discussions</button>
+          </div>
+
+          <div class="card">
+            <h3>Success Stories</h3>
+            <p>
+              Read inspiring stories from community health workers making a
+              difference.
+            </p>
+            <div class="story-preview">
+              <small
+                >"Thanks to the training, I helped deliver 15 healthy babies
+                this month!" - Mary K.</small
+              >
+            </div>
+            <button class="btn btn-secondary">Read Stories</button>
+          </div>
+
+          <div class="card">
+            <h3>Ask the Community</h3>
+            <p>
+              Get help and advice from experienced health workers in your area.
+            </p>
+            <button class="btn">Post a Question</button>
+          </div>
+
+          <div class="card">
+            <h3>Local Events</h3>
+            <p>Upcoming health workshops and training sessions in your area.</p>
+            <div class="event-preview">
+              <small>📅 Next: Vaccination Drive Training - Tomorrow 2PM</small>
+            </div>
+            <button class="btn">View All Events</button>
+          </div>
+        </div>
+      </div>
+      <div id="subscription" class="section">
+        <div class="card">
+          <h3>Subscription Plans</h3>
+          <p>Choose a plan that works for you</p>
+          
+          <div class="subscription-plans">
+            <div class="plan-card free">
+              <h4>Free Plan</h4>
+              <div class="plan-price">$0<span>/month</span></div>
+              <ul class="plan-features">
+                <li>✓ Basic training modules</li>
+                <li>✓ AI assistant (limited)</li>
+                <li>✓ Community access</li>
+                <li>✗ Premium modules</li>
+                <li>✗ Priority support</li>
+              </ul>
+              <button class="btn btn-secondary" disabled>Current Plan</button>
+            </div>
+            
+            <div class="plan-card premium">
+              <h4>Premium Plan</h4>
+              <div class="plan-price">KES 500<span>/month</span></div>
+              <ul class="plan-features">
+                <li>✓ All training modules</li>
+                <li>✓ Unlimited AI assistant</li>
+                <li>✓ Premium community features</li>
+                <li>✓ Advanced analytics</li>
+                <li>✓ Priority support</li>
+              </ul>
+              <button class="btn" data-plan="premium">Subscribe Now</button>
+            </div>
+          </div>
+          
+          <div id="subscription-status" class="subscription-status">
+            <!-- Status will be populated by JavaScript -->
+          </div>
+        </div>
+      </div>
+
+      <!-- Footer -->
+      <div class="footer">
+        <p>HealthGuide Community v1.0 | SDG 3: Good Health and Well-being</p>
+        <div class="footer-links">
+          <a href="#privacy">Privacy</a> | <a href="#terms">Terms</a> |
+          <a href="#support">Support</a>
+        </div>
+      </div>
+    </div>
+
+    <script type="module" src="config.js"></script>
+    <script type="module" src="script.js"></script>
+    <script src="sw.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+
+  </body>
+</html>

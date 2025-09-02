@@ -1,0 +1,306 @@
+/* =======================
+   Auth Pages (Signup + Login)
+   ======================= */
+
+/* CSS Custom Properties */
+:root {
+    --primary-blue: #0077B6;
+    --primary-blue-light: #00A8E8;
+    --primary-blue-dark: #005577;
+    --secondary-green: #2ECC71;
+    --secondary-green-light: #58D68D;
+    --secondary-green-dark: #239B56;
+    --accent-coral: #FF7F50;
+    --accent-coral-light: #FF9A73;
+    --accent-coral-dark: #E6633D;
+    --bg-primary: #F9FAFB;
+    --bg-secondary: #FFFFFF;
+    --bg-card: rgba(255, 255, 255, 0.95);
+    --text-primary: #2C3E50;
+    --text-secondary: #5A6C7D;
+    --text-muted: #8B9DC3;
+    --border-light: #E8EDF5;
+    --shadow-light: rgba(0, 119, 182, 0.1);
+    --shadow-medium: rgba(0, 119, 182, 0.15);
+    --shadow-heavy: rgba(0, 119, 182, 0.25);
+  }
+  
+  * {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+  }
+  
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen,
+      Ubuntu, Cantarell, sans-serif;
+    line-height: 1.6;
+    color: var(--text-primary);
+    min-height: 100vh;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 20px;
+  }
+  
+  /* ✅ background differs: set per-page */
+  body.signup {
+    background: linear-gradient(135deg, var(--secondary-green) 0%, var(--primary-blue) 100%);
+  }
+  body.login {
+    background: linear-gradient(135deg, var(--primary-blue) 0%, var(--secondary-green) 100%);
+  }
+  
+  .container {
+    background: var(--bg-card);
+    backdrop-filter: blur(10px);
+    border-radius: 20px;
+    padding: 40px;
+    box-shadow: 0 20px 60px var(--shadow-heavy);
+    width: 100%;
+    max-width: 450px;
+    text-align: center;
+    border: 1px solid var(--border-light);
+    animation: slideIn 0.6s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+  }
+  
+  @keyframes slideIn {
+    from {
+      opacity: 0;
+      transform: translateY(30px) scale(0.95);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+  }
+  
+  .logo {
+    margin-bottom: 30px;
+  }
+  
+  .logo h1 {
+    font-size: 2.2em;
+    font-weight: 700;
+    background: linear-gradient(135deg, var(--secondary-green) 0%, var(--primary-blue) 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    margin-bottom: 8px;
+  }
+  
+  .logo p {
+    color: var(--text-secondary);
+    font-size: 1em;
+  }
+  
+  h2 {
+    margin-bottom: 30px;
+    color: var(--text-primary);
+    font-size: 1.8em;
+    font-weight: 600;
+  }
+  
+  /* Form controls */
+  .form-group {
+    position: relative;
+    margin-bottom: 20px;
+    text-align: left;
+  }
+  .form-group label {
+    display: block;
+    margin-bottom: 8px;
+    color: var(--text-secondary);
+    font-weight: 500;
+    font-size: 0.9em;
+  }
+  .input-wrapper {
+    position: relative;
+  }
+  input[type="email"],
+  input[type="password"],
+  input[type="text"] {
+    width: 100%;
+    padding: 15px 20px;
+    border: 2px solid var(--border-light);
+    border-radius: 12px;
+    font-size: 16px;
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+    transition: all 0.3s ease;
+    font-family: inherit;
+  }
+  input[type="password"] {
+    padding-right: 50px;
+  }
+  input:focus {
+    outline: none;
+    border-color: var(--secondary-green);
+    box-shadow: 0 0 0 3px rgba(46, 204, 113, 0.1);
+    transform: translateY(-1px);
+  }
+  input::placeholder {
+    color: var(--text-muted);
+  }
+  input.valid {
+    border-color: var(--secondary-green);
+    box-shadow: 0 0 0 2px rgba(46, 204, 113, 0.1);
+  }
+  input.invalid {
+    border-color: #F44336;
+    box-shadow: 0 0 0 2px rgba(244, 67, 54, 0.1);
+  }
+  
+  /* Password toggle */
+  .password-toggle {
+    position: absolute;
+    right: 15px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: var(--text-muted);
+    font-size: 18px;
+    padding: 5px;
+    border-radius: 4px;
+    transition: color 0.3s ease;
+  }
+  .password-toggle:hover {
+    color: var(--secondary-green);
+  }
+  
+  /* Password feedback */
+  .password-strength,
+  .password-match {
+    margin-top: 8px;
+    padding: 8px;
+    border-radius: 6px;
+    font-size: 0.85em;
+    text-align: left;
+    display: none;
+  }
+  .password-strength.weak {
+    background: #FFEBEE;
+    color: #C62828;
+    border: 1px solid #FFCDD2;
+  }
+  .password-strength.medium {
+    background: #FFF3E0;
+    color: #E65100;
+    border: 1px solid #FFE0B2;
+  }
+  .password-strength.strong {
+    background: #E8F5E8;
+    color: var(--secondary-green-dark);
+    border: 1px solid #C8E6C9;
+  }
+  .password-match.match {
+    background: #E8F5E8;
+    color: var(--secondary-green-dark);
+    border: 1px solid #C8E6C9;
+  }
+  .password-match.no-match {
+    background: #FFEBEE;
+    color: #C62828;
+    border: 1px solid #FFCDD2;
+  }
+  
+  /* Buttons */
+  .btn {
+    width: 100%;
+    padding: 15px 20px;
+    margin-top: 20px;
+    border: none;
+    border-radius: 12px;
+    background: linear-gradient(135deg, var(--primary-blue), var(--primary-blue-dark));
+    color: white;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    font-family: inherit;
+  }
+  .btn-primary {
+    background: linear-gradient(135deg, var(--secondary-green), var(--secondary-green-dark));
+    box-shadow: 0 8px 25px rgba(46, 204, 113, 0.3);
+  }
+  .btn-primary:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 12px 35px rgba(46, 204, 113, 0.4);
+  }
+  .btn-secondary {
+    background: linear-gradient(135deg, var(--primary-blue), var(--primary-blue-dark));
+    box-shadow: 0 8px 25px var(--shadow-medium);
+    margin-top: 10px;
+  }
+  .btn-secondary:hover {
+    box-shadow: 0 12px 35px var(--shadow-heavy);
+  }
+  .btn:active {
+    transform: translateY(0);
+  }
+  .btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+  
+  /* Messages */
+  .error-message,
+  .success-message,
+  .email-confirmation {
+    border-radius: 8px;
+    padding: 12px;
+    margin-top: 15px;
+    font-size: 14px;
+    display: none;
+    animation: slideIn 0.3s ease;
+  }
+  .error-message {
+    background: linear-gradient(135deg, #FFEBEE, #FFCDD2);
+    border: 1px solid #F44336;
+    color: #C62828;
+  }
+  .success-message {
+    background: linear-gradient(135deg, #E8F5E8, #C8E6C9);
+    border: 1px solid var(--secondary-green);
+    color: var(--secondary-green-dark);
+  }
+  .email-confirmation {
+    background: linear-gradient(135deg, #E3F2FD, #BBDEFB);
+    border: 1px solid var(--primary-blue);
+    color: var(--primary-blue-dark);
+    text-align: left;
+  }
+  
+  /* Footer */
+  .form-footer {
+    margin-top: 30px;
+    text-align: center;
+  }
+  .form-footer p {
+    color: var(--text-secondary);
+    margin-bottom: 15px;
+  }
+  .form-footer a {
+    font-weight: 600;
+    text-decoration: none;
+  }
+  .form-footer a:hover {
+    text-decoration: underline;
+  }
+  
+  /* Responsive */
+  @media (max-width: 480px) {
+    .container {
+      padding: 30px 25px;
+      margin: 10px;
+    }
+    .logo h1 {
+      font-size: 1.8em;
+    }
+    h2 {
+      font-size: 1.5em;
+    }
+  }
+  
