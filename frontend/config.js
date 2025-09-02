@@ -3,10 +3,11 @@
 // =======================
 const getApiBase = () => {
   if (window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
-    return "https://health-development.onrender.com"; 
+    return "https://health-development.onrender.com/api";  // ✅ include /api
   }
   return "http://127.0.0.1:5000/api"; 
 };
+
 
 const API_BASE = getApiBase(); // ✅ use dynamic base
  // Flask backend base URL
