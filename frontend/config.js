@@ -2,14 +2,14 @@
 // Enhanced config.js for HealthGuide Community
 // =======================
 const getApiBase = () => {
-  // Check if we're in production (Netlify sets NODE_ENV)
   if (window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
-    return "https://health-development.onrender.com"; // Replace with your actual Render URL
+    return "https://health-development.onrender.com"; 
   }
-  return "http://127.0.0.1:5000/api"; // Development
+  return "http://127.0.0.1:5000/api"; 
 };
 
-const API_BASE = "https://health-development.onrender.com"; // Flask backend base URL
+const API_BASE = getApiBase(); // ✅ use dynamic base
+ // Flask backend base URL
 
 // ===== ENHANCED UTILS =====
 const UTILS = {
