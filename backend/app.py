@@ -21,13 +21,15 @@ app = Flask(__name__)
 # Environment config
 FLASK_ENV = os.getenv('FLASK_ENV', 'development')
 FLASK_DEBUG = os.getenv('FLASK_DEBUG', 'True').lower() == 'true'
-if FLASK_ENV == 'production':
-    CORS(app, origins=[
+if FLASK_ENV == "production":
+    CORS(app, resources={r"/*": {"origins": [
         "http://127.0.0.1:5500",
-        "https://health-development.netlify.app"  # ✅ no trailing slash
-    ], supports_credentials=True)
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        "https://health-development.netlify.app"
+    ]}}, supports_credentials=True, allow_headers=["Content-Type", "Authorization"])
 else:
-    CORS(app, supports_credentials=True)
+    CORS(app, supports_credentials=True, allow_headers=["Content-Type", "Authorization"])
 
 
 # Supabase config
