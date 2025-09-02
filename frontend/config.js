@@ -9,7 +9,7 @@ const getApiBase = () => {
   return "http://127.0.0.1:5000/api"; // Development
 };
 
-const API_BASE = "http://127.0.0.1:5000/api"; // Flask backend base URL
+const API_BASE = "https://health-development.onrender.com"; // Flask backend base URL
 
 // ===== ENHANCED UTILS =====
 const UTILS = {

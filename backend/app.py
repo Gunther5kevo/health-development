@@ -24,8 +24,9 @@ FLASK_DEBUG = os.getenv('FLASK_DEBUG', 'True').lower() == 'true'
 if FLASK_ENV == 'production':
     # Update with your actual frontend domain after deploying to Netlify
     CORS(app, origins=[
-        "https://68b6b8659299a200080d765f--health-development.netlify.app/",  # Replace with actual domain
-        "https://healthguide-community.netlify.app"  # Alternative domain
+        "http://127.0.0.1:5500"
+        "https://health-development.netlify.app/", 
+    
     ])
 else:
     CORS(app)
