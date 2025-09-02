@@ -22,14 +22,13 @@ app = Flask(__name__)
 FLASK_ENV = os.getenv('FLASK_ENV', 'development')
 FLASK_DEBUG = os.getenv('FLASK_DEBUG', 'True').lower() == 'true'
 if FLASK_ENV == 'production':
-    # Update with your actual frontend domain after deploying to Netlify
     CORS(app, origins=[
-        "http://127.0.0.1:5500"
-        "https://health-development.netlify.app/", 
-    
-    ])
+        "http://127.0.0.1:5500",
+        "https://health-development.netlify.app"  # ✅ no trailing slash
+    ], supports_credentials=True)
 else:
-    CORS(app)
+    CORS(app, supports_credentials=True)
+
 
 # Supabase config
 SUPABASE_URL = os.getenv('SUPABASE_URL')
