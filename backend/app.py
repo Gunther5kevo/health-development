@@ -5,7 +5,7 @@ import os
 from datetime import datetime, timezone, timedelta
 
 from functools import wraps
-import requests, jsonify
+import requests
 import time
 import random
 import openai
@@ -16,11 +16,19 @@ load_dotenv()
 
 # Initialize Flask app
 app = Flask(__name__)
-CORS(app)
+
 
 # Environment config
 FLASK_ENV = os.getenv('FLASK_ENV', 'development')
 FLASK_DEBUG = os.getenv('FLASK_DEBUG', 'True').lower() == 'true'
+if FLASK_ENV == 'production':
+    # Update with your actual frontend domain after deploying to Netlify
+    CORS(app, origins=[
+        "https://your-healthguide-app.netlify.app",  # Replace with actual domain
+        "https://healthguide-community.netlify.app"  # Alternative domain
+    ])
+else:
+    CORS(app)
 
 # Supabase config
 SUPABASE_URL = os.getenv('SUPABASE_URL')
