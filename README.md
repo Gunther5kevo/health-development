@@ -38,7 +38,7 @@ health-development/
 ⚙️ Setup Instructions
 1. Backend (Flask)
 # Clone the repo
-git clone https://github.com/yourusername/health-development.git
+git clone https://github.com/Gunther5kevo/health-development.git
 cd health-development/backend
 
 # Create virtual environment
