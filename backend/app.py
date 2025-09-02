@@ -239,10 +239,10 @@ def ai_request_with_fallback(prompt, max_length=200):
         
         # List of models to try (best for free tier, ordered by preference)
         models_to_try = [
-            "HuggingFaceH4/zephyr-7b-beta",  # Good for conversations
-            "tiiuae/falcon-7b-instruct",  # Original choice
-            "microsoft/DialoGPT-small",  # Smaller, faster
-            "google/flan-t5-large",  # Larger but might have rate limits
+            "mistralai/Mistral-7B-Instruct-v0.2",  # Good for conversations
+            "google/flan-t5-base",  # Original choice
+            "HuggingFaceH4/zephyr-7b-beta",  # Smaller, faster
+            "tiiuae/falcon-7b-instruct-v2",  # Larger but might have rate limits
         ]
         
         for model in models_to_try:
