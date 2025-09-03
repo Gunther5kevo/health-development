@@ -18,6 +18,9 @@ load_dotenv()
 app = Flask(__name__)
 
 
+INTASEND_SECRET_KEY = os.getenv("INTASEND_SECRET_KEY")
+API_BASE = "https://sandbox.intasend.com/api/v1"
+
 # Environment config
 FLASK_ENV = os.getenv('FLASK_ENV', 'development')
 FLASK_DEBUG = os.getenv('FLASK_DEBUG', 'True').lower() == 'true'
@@ -331,16 +334,38 @@ Please provide clear, actionable guidance while emphasizing the importance of pr
 ⚠️ Disclaimer: This is educational information only. Always consult a licensed healthcare professional for medical advice."""
 
 
-def supabase_request(method, endpoint, data=None, params=None, use_service_key=False):
-    url = f"{SUPABASE_URL}/rest/v1/{endpoint}"
-    api_key = SUPABASE_SERVICE_KEY if use_service_key else SUPABASE_KEY
+# Replace your existing supabase_request function with this enhanced version:
 
-    headers = {
-        'apikey': api_key,
-        'Authorization': f'Bearer {api_key}',
-        'Content-Type': 'application/json',
-        'Prefer': 'return=representation'  # 👈 ensures Supabase returns JSON rows
-    }
+def supabase_request(method, endpoint, data=None, params=None, use_service_key=False, user_token=None):
+    """Enhanced Supabase request function that handles both service key and user token authentication"""
+    url = f"{SUPABASE_URL}/rest/v1/{endpoint}"
+    
+    if use_service_key:
+        # Use service key (bypasses RLS)
+        api_key = SUPABASE_SERVICE_KEY
+        headers = {
+            'apikey': api_key,
+            'Authorization': f'Bearer {api_key}',
+            'Content-Type': 'application/json',
+            'Prefer': 'return=representation'
+        }
+    elif user_token:
+        # Use user JWT token (works with RLS policies)
+        headers = {
+            'apikey': SUPABASE_KEY,  # anon key
+            'Authorization': f'Bearer {user_token}',  # user's JWT token
+            'Content-Type': 'application/json',
+            'Prefer': 'return=representation'
+        }
+    else:
+        # Default behavior (unchanged from your original)
+        api_key = SUPABASE_KEY
+        headers = {
+            'apikey': api_key,
+            'Authorization': f'Bearer {api_key}',
+            'Content-Type': 'application/json',
+            'Prefer': 'return=representation'
+        }
 
     try:
         if method == 'GET':
@@ -355,17 +380,15 @@ def supabase_request(method, endpoint, data=None, params=None, use_service_key=F
             return None
 
         if resp.status_code < 400:
-            if resp.text.strip():  # only parse JSON if not empty
+            if resp.text.strip():
                 return resp.json()
-            return []  # return empty list if no body
+            return []
         else:
             print(f"Supabase error {resp.status_code}: {resp.text}")
             return None
     except requests.RequestException as e:
         print(f"Supabase request error: {e}")
         return None
-
-
 # ----------------------
 # Auth Middleware
 # ----------------------
@@ -534,20 +557,27 @@ def login():
     }), 200
 
 
-# Profile
+
 @app.route('/api/users/profile', methods=['GET'])
 @token_required
 def get_profile(current_user_id):
-    profile = supabase_request('GET', f'profiles?id=eq.{current_user_id}')
-    if not profile:
+    """Get user profile with proper authentication"""
+    
+    # Extract token from request headers
+    user_token = request.headers.get('Authorization', '').replace('Bearer ', '')
+    
+    # Try with user token first (proper RLS)
+    profile = supabase_request('GET', f'profiles?id=eq.{current_user_id}', user_token=user_token)
+    
+    # Fall back to service key if needed
+    if not profile or len(profile) == 0:
+        profile = supabase_request('GET', f'profiles?id=eq.{current_user_id}', use_service_key=True)
+    
+    if not profile or len(profile) == 0:
         return jsonify({'error': 'Profile not found'}), 404
+    
     return jsonify({'profile': profile[0]}), 200
 
-import requests
-from flask import request, jsonify
-
-INTASEND_SECRET_KEY = os.getenv("INTASEND_SECRET_KEY")
-API_BASE = "https://sandbox.intasend.com/api/v1"
 
 @app.route("/api/payments/create-subscription", methods=["POST"])
 @token_required
@@ -584,6 +614,21 @@ def subscription_required(f):
             return jsonify({"error": "Active subscription required"}), 403
         return f(current_user_id, *args, **kwargs)
     return decorated
+
+@app.route("/api/users/subscription-status", methods=["GET"])
+@token_required
+def subscription_status(current_user_id):
+    subs = supabase_request(
+        "GET", f"subscriptions?user_id=eq.{current_user_id}&status=eq.active", 
+        use_service_key=True
+    )
+    
+    if not subs:
+        return jsonify({"status": "inactive"}), 200
+    
+    # You could expand this with plan, expiry, etc.
+    return jsonify({"status": "active", "subscription": subs[0]}), 200
+
 
 # Training modules list
 @app.route('/api/training/modules', methods=['GET'])
@@ -633,16 +678,6 @@ def get_training_module(current_user_id, identifier):
     }), 200
 
 
-# Update profile
-@app.route('/api/users/profile', methods=['PUT'])
-@token_required
-def update_profile(current_user_id):
-    data = request.get_json()
-    # Use PATCH instead of PUT and add proper filter
-    profile = supabase_request('PATCH', f'profiles?id=eq.{current_user_id}', data, use_service_key=True)
-    if not profile:
-        return jsonify({'error': 'Failed to update profile'}), 500
-    return jsonify({'profile': profile[0] if profile else {}}), 200
 
 
 # Training progress
@@ -690,59 +725,71 @@ def update_progress(current_user_id):
     return jsonify({"progress": result[0]}), 200
 
 # Mark training module complete
-from datetime import datetime, timezone
 
 @app.route('/api/training/modules/<int:module_id>/complete', methods=['POST'])
 @token_required
 def mark_module_complete(current_user_id, module_id):
-    """Mark a training module as complete for the current user"""
+    """Mark a training module as complete for the current user (idempotent logic)"""
 
-    # Check if user profile exists
+    # Ensure profile exists
     user_check = supabase_request(
         "GET",
         "profiles",
         {"id": current_user_id},
         use_service_key=True
     )
-
     if not user_check:
-        # Auto-create a profile with default values
         profile_data = {
             "id": current_user_id,
-            "name": f"User {current_user_id[:8]}",  # fallback name
+            "name": f"User {current_user_id[:8]}",
             "location": "Unknown",
             "role": "health_worker",
             "created_at": datetime.now(timezone.utc).isoformat(),
             "updated_at": datetime.now(timezone.utc).isoformat()
         }
+        supabase_request("POST", "profiles", profile_data, use_service_key=True)
 
-        create_profile = supabase_request(
-            "POST",
-            "profiles",
-            profile_data,
-            use_service_key=True
-        )
-
-        if not create_profile:
-            return jsonify({
-                "error": "Failed to create user profile. Cannot mark module complete."
-            }), 500
-
-    # Insert module completion into user_progress
+    # Completion payload
     completion_data = {
-        "user_id": current_user_id,
-        "module_id": module_id,
-        "score": 100,       # or progress
+        "score": 100,
         "completed": True,
-        "completed_at": datetime.now(timezone.utc).isoformat()
+        "completed_at": datetime.now(timezone.utc).isoformat(),
+        "updated_at": datetime.now(timezone.utc).isoformat()
     }
 
-    result = supabase_request("POST", "user_progress", completion_data, use_service_key=True)
+    # 1. Try update first (⚡ use and= filter)
+    updated = supabase_request(
+        "PATCH",
+        "user_progress",
+        completion_data,
+        params={
+            "and": f"(user_id.eq.{current_user_id},module_id.eq.{module_id})"
+        },
+        use_service_key=True
+    )
 
-    if not result:
+    if updated and len(updated) > 0:
+        return jsonify({"success": True, "progress": updated[0]}), 200
+
+    # 2. If no row updated → insert new
+    inserted = supabase_request(
+        "POST",
+        "user_progress",
+        {
+            "user_id": current_user_id,
+            "module_id": module_id,
+            **completion_data
+        },
+        use_service_key=True
+    )
+
+    if not inserted:
         return jsonify({"error": "Failed to mark module as complete"}), 500
 
-    return jsonify({"success": True, "progress": result[0]}), 200
+    return jsonify({"success": True, "progress": inserted[0]}), 200
+
+
+
 
 # AI Chat
 @app.route('/api/ai/chat', methods=['POST'])
@@ -1194,6 +1241,24 @@ def search_forum_posts(current_user_id):
         'posts': posts,
         'query': query,
         'count': len(posts)
+    }), 200
+
+@app.route("/api/users/community-activity", methods=["GET"])
+@token_required
+def user_community_activity(current_user_id):
+    posts = supabase_request(
+        "GET", f"forum_posts?user_id=eq.{current_user_id}&order=created_at.desc", 
+        use_service_key=True
+    ) or []
+    
+    comments = supabase_request(
+        "GET", f"forum_comments?user_id=eq.{current_user_id}&order=created_at.desc", 
+        use_service_key=True
+    ) or []
+    
+    return jsonify({
+        "posts": posts,
+        "comments": comments
     }), 200
 
 

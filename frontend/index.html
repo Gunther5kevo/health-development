@@ -31,37 +31,43 @@
       </div>
 
       <!-- Content -->
-      <div class="content">
-        <!-- Dashboard Section -->
-        <div id="dashboard" class="section active">
-          <div class="stats-grid">
-            <div class="stat-card">
-              <div class="stat-number">5</div>
-              <div class="stat-label">Modules Completed</div>
-            </div>
-            <div class="stat-card">
-              <div class="stat-number">85%</div>
-              <div class="stat-label">Progress</div>
-            </div>
-          </div>
+      <div id="dashboard" class="section active">
+     <div class="stats-grid">
+      <div class="stat-card">
+      <div class="stat-number" id="completed-modules">0</div>
+      <div class="stat-label">Modules Completed</div>
+      </div>
+      <div class="stat-card">
+      <div class="stat-number" id="user-progress">0%</div>
+      <div class="stat-label">Progress</div>
+      </div>
+      <div class="stat-card">
+      <div class="stat-number" id="study-hours">0</div>
+      <div class="stat-label">Study Hours</div>
+      </div>
+      <div class="stat-card">
+      <div class="stat-number" id="community-points">0</div>
+      <div class="stat-label">Community Points</div>
+      </div>
+      </div>
 
-          <div class="card">
-            <h3>Welcome Back!</h3>
-            <p>
-              Continue your health worker training journey. You're doing great!
-            </p>
-            <div class="progress-bar">
-              <div class="progress-fill" style="width: 85%"></div>
-            </div>
-            <button class="btn">Continue Learning</button>
-          </div>
+    <div class="card">
+    <h3>Welcome Back<span id="user-name-display"></span>!</h3>
+    <p id="progress-message">
+      Continue your health worker training journey. You're doing great!
+    </p>
+    <div class="progress-bar">
+      <div class="progress-fill" id="main-progress-bar" style="width: 0%"></div>
+    </div>
+    <button class="btn" onclick="navigateToTraining()">Continue Learning</button>
+      </div>
 
-          <div class="card">
-            <h3>Quick Actions</h3>
-            <button class="btn btn-secondary">Emergency Protocols</button>
-            <button class="btn">Ask AI Assistant</button>
-          </div>
-        </div>
+     <div class="card">
+     <h3>Quick Actions</h3>
+    <button class="btn btn-secondary">Emergency Protocols</button>
+    <button class="btn">Ask AI Assistant</button>
+    </div>
+      </div>
 
         <!-- Training Section -->
         <div id="training" class="section">

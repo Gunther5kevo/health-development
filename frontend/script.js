@@ -15,17 +15,19 @@ function showSection(sectionId, skipHistory = false) {
   document.querySelectorAll(".section").forEach((s) => {
     s.classList.remove("active");
   });
-  
+
   // Hide module view specifically
   const moduleView = document.getElementById("module-view");
   if (moduleView) {
     moduleView.classList.remove("active");
     moduleView.hidden = true;
   }
-  
+
   // Remove active from all tabs
-  document.querySelectorAll(".nav-tab").forEach((t) => t.classList.remove("active"));
-  
+  document
+    .querySelectorAll(".nav-tab")
+    .forEach((t) => t.classList.remove("active"));
+
   // Show target section
   const target = document.getElementById(sectionId);
   if (target) {
@@ -34,26 +36,33 @@ function showSection(sectionId, skipHistory = false) {
       target.hidden = false;
     }
   }
-  
+
   // Highlight correct tab
   const tab = document.querySelector(`.nav-tab[data-section="${sectionId}"]`);
   if (tab) tab.classList.add("active");
-  
+
   // Update URL hash without triggering popstate
   if (!skipHistory) {
     const desiredHash = `#${sectionId}`;
     if (location.hash !== desiredHash) {
-      history.pushState({ section: sectionId, timestamp: Date.now() }, "", desiredHash);
+      history.pushState(
+        { section: sectionId, timestamp: Date.now() },
+        "",
+        desiredHash
+      );
     }
   }
-  
+
   // Initialize section-specific content
-  if (sectionId === "community" && !document.getElementById("community-content")) {
+  if (
+    sectionId === "community" &&
+    !document.getElementById("community-content")
+  ) {
     initializeCommunity();
   } else if (sectionId === "ai-assistant" && !chatInitialized) {
     initializeAIChat();
   }
-  
+
   trackPageView(sectionId);
 }
 
@@ -128,17 +137,22 @@ async function startTrainingModule(button) {
     }, 2000);
     return;
   }
-  
+
   const identifier = button.dataset.moduleId || button.dataset.moduleSlug;
   if (!identifier) {
-    UTILS.showNotification("This module has no identifier. Please refresh.", "warning");
+    UTILS.showNotification(
+      "This module has no identifier. Please refresh.",
+      "warning"
+    );
     return;
   }
-  
+
   showLoading(button);
-  
+
   try {
-    const res = await API.get(`/training/modules/${encodeURIComponent(identifier)}`);
+    const res = await API.get(
+      `/training/modules/${encodeURIComponent(identifier)}`
+    );
     if (!res?.content) throw new Error("Module not found");
     showModule(res, identifier);
   } catch (error) {
@@ -181,22 +195,32 @@ function showModule(module, identifier = "") {
       <div class="module-body markdown-content">${renderedContent}</div>
       <div class="module-footer">
         <button class="btn btn-secondary" id="back-to-training">← Back to Training</button>
-        ${module.quiz ? `<button class="btn" id="take-quiz">Take Quiz</button>` : ""}
+        ${
+          module.quiz
+            ? `<button class="btn" id="take-quiz">Take Quiz</button>`
+            : ""
+        }
         <button class="btn btn-primary" id="mark-complete">Mark as Complete</button>
       </div>
     </div>
   `;
 
   // Hide all sections
-  document.querySelectorAll(".section").forEach((s) => s.classList.remove("active"));
+  document
+    .querySelectorAll(".section")
+    .forEach((s) => s.classList.remove("active"));
 
   // Show module view
   moduleView.hidden = false;
   moduleView.classList.add("active");
 
   // Keep training tab highlighted
-  document.querySelectorAll(".nav-tab").forEach((t) => t.classList.remove("active"));
-  const trainingTab = document.querySelector('.nav-tab[data-section="training"]');
+  document
+    .querySelectorAll(".nav-tab")
+    .forEach((t) => t.classList.remove("active"));
+  const trainingTab = document.querySelector(
+    '.nav-tab[data-section="training"]'
+  );
   if (trainingTab) trainingTab.classList.add("active");
 
   // Update history with module-specific URL
@@ -215,65 +239,134 @@ function showModule(module, identifier = "") {
   });
 
   // ✅ Simplified Mark Complete functionality (Option 1)
-  document.getElementById("mark-complete")?.addEventListener("click", async () => {
-    const markCompleteBtn = document.getElementById("mark-complete");
+  document
+    .getElementById("mark-complete")
+    ?.addEventListener("click", async () => {
+      const markCompleteBtn = document.getElementById("mark-complete");
 
-    const token = UTILS.getFromLocal("auth_token");
-    if (!token) {
-      UTILS.showNotification("Please log in to mark modules as complete.", "error");
-      setTimeout(() => {
-        window.location.href = "login.html";
-      }, 2000);
-      return;
-    }
-
-    markCompleteBtn.disabled = true;
-    markCompleteBtn.textContent = "Marking...";
-
-    try {
-      const moduleId = identifier || module.slug || module.id;
-      const success = await API.markModuleComplete(moduleId, module.title);
-
-      if (success) {
-        // Update local state
-        if (currentUser) {
-          currentUser.completedModules = (currentUser.completedModules || 0) + 1;
-          currentUser.progress = Math.round(
-            (currentUser.completedModules / currentUser.totalModules) * 100
-          );
-          updateUserInterface();
-          updateDashboardStats();
-        }
-
-        // Update button state
-        markCompleteBtn.innerHTML = "✓ Completed";
-        markCompleteBtn.classList.add("completed");
-        markCompleteBtn.disabled = true;
-
-        // Auto-redirect back to training after 2 seconds
+      const token = UTILS.getFromLocal("auth_token");
+      if (!token) {
+        UTILS.showNotification(
+          "Please log in to mark modules as complete.",
+          "error"
+        );
         setTimeout(() => {
-          showSection("training");
-          loadTrainingModules();
+          window.location.href = "login.html";
         }, 2000);
-      } else {
-        throw new Error("Unable to mark module as complete. Please try again later.");
+        return;
       }
-    } catch (error) {
-      console.error("Mark complete error:", error);
-      const errorMessage = error?.message || "Unknown error occurred";
-      UTILS.showNotification(`Failed to mark as complete: ${errorMessage}`, "error");
-      markCompleteBtn.disabled = false;
-      markCompleteBtn.textContent = "Mark as Complete";
-    }
-  });
+
+      markCompleteBtn.disabled = true;
+      markCompleteBtn.textContent = "Marking...";
+
+      try {
+        const moduleId = identifier || module.slug || module.id;
+        const success = await API.markModuleComplete(moduleId, module.title);
+
+        if (success) {
+          // Update local state
+          if (currentUser) {
+            currentUser.completedModules =
+              (currentUser.completedModules || 0) + 1;
+            currentUser.progress = Math.round(
+              (currentUser.completedModules / currentUser.totalModules) * 100
+            );
+            updateUserInterface();
+            updateDashboardStats();
+          }
+
+          // Update button state
+          markCompleteBtn.innerHTML = "✓ Completed";
+          markCompleteBtn.classList.add("completed");
+          markCompleteBtn.disabled = true;
+
+          // Auto-redirect back to training after 2 seconds
+          setTimeout(() => {
+            showSection("training");
+            loadTrainingModules();
+          }, 2000);
+        } else {
+          throw new Error(
+            "Unable to mark module as complete. Please try again later."
+          );
+        }
+      } catch (error) {
+        console.error("Mark complete error:", error);
+        const errorMessage = error?.message || "Unknown error occurred";
+        UTILS.showNotification(
+          `Failed to mark as complete: ${errorMessage}`,
+          "error"
+        );
+        markCompleteBtn.disabled = false;
+        markCompleteBtn.textContent = "Mark as Complete";
+      }
+    });
 
   document.getElementById("take-quiz")?.addEventListener("click", () => {
     showQuiz(module.quiz);
   });
 }
 
+async function markModuleCompleteWithStats(moduleId, moduleTitle, timeSpent = 2) {
+  const markCompleteBtn = document.getElementById("mark-complete");
 
+  const token = UTILS.getFromLocal("auth_token");
+  if (!token) {
+    UTILS.showNotification("Please log in to mark modules as complete.", "error");
+    setTimeout(() => {
+      window.location.href = "login.html";
+    }, 2000);
+    return;
+  }
 
+  markCompleteBtn.disabled = true;
+  markCompleteBtn.textContent = "Marking...";
+
+  try {
+    const success = await API.markModuleComplete(moduleId, moduleTitle);
+
+    if (success) {
+      // Update local state with more details
+      if (currentUser) {
+        currentUser.completedModules = (currentUser.completedModules || 0) + 1;
+        currentUser.progress = Math.round(
+          (currentUser.completedModules / currentUser.totalModules) * 100
+        );
+        currentUser.studyHours = (currentUser.studyHours || 0) + timeSpent;
+        currentUser.communityPoints = (currentUser.communityPoints || 0) + 10; // Reward points
+        
+        // Try to update study time on backend
+        try {
+          await API.updateStudyTime(moduleId, timeSpent);
+        } catch (error) {
+          console.log("Could not update study time:", error.message);
+        }
+        
+        updateUserInterface();
+        updateDashboardStats();
+      }
+
+      markCompleteBtn.innerHTML = "✓ Completed";
+      markCompleteBtn.classList.add("completed");
+      markCompleteBtn.disabled = true;
+
+      UTILS.showNotification(`Module completed! +10 points earned!`, "success");
+
+      setTimeout(() => {
+        showSection("training");
+        loadTrainingModules();
+      }, 2000);
+    } else {
+      throw new Error("Unable to mark module as complete. Please try again later.");
+    }
+  } catch (error) {
+    console.error("Mark complete error:", error);
+    const errorMessage = error?.message || "Unknown error occurred";
+    UTILS.showNotification(`Failed to mark as complete: ${errorMessage}`, "error");
+    markCompleteBtn.disabled = false;
+    markCompleteBtn.textContent = "Mark as Complete";
+  }
+}
 
 // -----------------------
 // Enhanced Emergency Protocols
@@ -373,30 +466,38 @@ function showEmergencyProtocols() {
       </div>
     </div>
   `;
-  
+
   document.body.appendChild(modal);
-  
+
   // Tab switching
-  modal.querySelectorAll(".emergency-tab").forEach(tab => {
+  modal.querySelectorAll(".emergency-tab").forEach((tab) => {
     tab.addEventListener("click", () => {
-      modal.querySelectorAll(".emergency-tab").forEach(t => t.classList.remove("active"));
-      modal.querySelectorAll(".protocol-section").forEach(s => s.classList.remove("active"));
-      
+      modal
+        .querySelectorAll(".emergency-tab")
+        .forEach((t) => t.classList.remove("active"));
+      modal
+        .querySelectorAll(".protocol-section")
+        .forEach((s) => s.classList.remove("active"));
+
       tab.classList.add("active");
-      modal.querySelector(`.protocol-section[data-protocol="${tab.dataset.protocol}"]`).classList.add("active");
+      modal
+        .querySelector(
+          `.protocol-section[data-protocol="${tab.dataset.protocol}"]`
+        )
+        .classList.add("active");
     });
   });
-  
+
   // Close modal
   document.getElementById("close-emergency").addEventListener("click", () => {
     modal.remove();
   });
-  
+
   // Print functionality
   document.getElementById("print-protocols").addEventListener("click", () => {
     window.print();
   });
-  
+
   // Close on escape key
   const escapeHandler = (e) => {
     if (e.key === "Escape") {
@@ -455,32 +556,31 @@ async function handleLogout(showNotification = true) {
     // Clear user data immediately
     currentUser = null;
     userProgress = {};
-    
+
     // Clear local storage
     UTILS.removeFromLocal("auth_token");
     UTILS.removeFromLocal("user_data");
-    
+
     // Try to call API logout (but don't block if it fails)
     try {
       await API.logout();
     } catch (error) {
       console.log("API logout failed (possibly already logged out):", error);
     }
-    
+
     // Update UI
     updateAuthButtons(false);
     showLoginPrompt();
-    
+
     // Show notification if requested
     if (showNotification) {
       UTILS.showNotification("You have been logged out.", "info");
     }
-    
+
     // Redirect to login page
     setTimeout(() => {
       window.location.href = "login.html";
     }, 1500);
-    
   } catch (error) {
     console.error("Logout error:", error);
     // Even if logout fails, still redirect to login
@@ -492,7 +592,7 @@ async function handleLogout(showNotification = true) {
 
 function handleSessionExpired() {
   UTILS.showNotification("Session expired. Please log in again.", "error");
-  
+
   // Automatically trigger logout after showing notification
   setTimeout(async () => {
     await handleLogout(false); // Don't show additional logout notification
@@ -504,17 +604,17 @@ function handleSessionExpired() {
 // -----------------------
 function handleApiError(error, context = "API call") {
   console.error(`${context} error:`, error);
-  
+
   // Check for authentication errors
   if (isAuthError(error)) {
     handleSessionExpired();
     return true; // Indicates auth error was handled
   }
-  
+
   // Handle other types of errors
   const message = error?.message || "An error occurred";
   UTILS.showNotification(`Error: ${message}`, "error");
-  
+
   return false; // Indicates non-auth error
 }
 
@@ -523,10 +623,10 @@ function handleApiError(error, context = "API call") {
 // -----------------------
 function isAuthError(error) {
   if (!error) return false;
-  
+
   const message = String(error.message || error.toString()).toLowerCase();
   const status = error.status || error.statusCode;
-  
+
   return (
     status === 401 ||
     status === 403 ||
@@ -547,11 +647,15 @@ async function refreshProfileFromBackend() {
     currentUser = {
       id: data.profile.id,
       name: data.profile.name,
+      email: data.profile.email,
       progress: 0,
       completedModules: 0,
-      totalModules: 8,
+      totalModules: 8, // You can make this dynamic too
+      studyHours: 0,
+      communityPoints: 0,
       location: data.profile.location,
-      subscriptionStatus: 'free', // Default
+      subscriptionStatus: 'free',
+      joinedDate: data.profile.created_at,
     };
     
     // Get subscription status
@@ -563,18 +667,40 @@ async function refreshProfileFromBackend() {
       console.log("Could not fetch subscription status:", error.message);
     }
     
-    const progressData = await API.getProgress();
-    if (progressData?.progress) {
-      currentUser.completedModules = progressData.progress.filter(
-        (p) => p.completed
-      ).length;
-      currentUser.progress = Math.round(
-        (currentUser.completedModules / currentUser.totalModules) * 100
-      );
+    // Get progress data
+    try {
+      const progressData = await API.getProgress();
+      if (progressData?.progress) {
+        const completedModules = progressData.progress.filter(p => p.completed);
+        currentUser.completedModules = completedModules.length;
+        currentUser.progress = Math.round(
+          (currentUser.completedModules / currentUser.totalModules) * 100
+        );
+        
+        // Calculate study hours (example calculation)
+        currentUser.studyHours = completedModules.reduce((total, module) => {
+          return total + (module.study_time || 2); // Default 2 hours per module
+        }, 0);
+      }
+    } catch (error) {
+      console.log("Could not fetch progress data:", error.message);
+    }
+    
+    // Get community activity data
+    try {
+      const communityData = await API.getCommunityActivity();
+      if (communityData) {
+        currentUser.communityPoints = communityData.points || 0;
+        currentUser.postsCount = communityData.posts_count || 0;
+        currentUser.commentsCount = communityData.comments_count || 0;
+      }
+    } catch (error) {
+      console.log("Could not fetch community data:", error.message);
     }
     
     updateUserInterface();
     updateDashboardStats();
+    
   } catch (error) {
     if (handleApiError(error, "Profile refresh")) {
       return;
@@ -584,19 +710,65 @@ async function refreshProfileFromBackend() {
 }
 
 function updateDashboardStats() {
-  if (!currentUser) return;
-  
-  const statsNumbers = document.querySelectorAll(".stat-number");
-  if (statsNumbers.length >= 2) {
-    statsNumbers[0].textContent = currentUser.completedModules;
-    statsNumbers[1].textContent = currentUser.progress + "%";
+  if (!currentUser) {
+    // Set default values for non-logged in users
+    updateStatElement("completed-modules", 0);
+    updateStatElement("user-progress", "0%");
+    updateStatElement("study-hours", 0);
+    updateStatElement("community-points", 0);
+    updateStatElement("main-progress-bar", 0);
+    updateStatElement("user-name-display", "");
+    updateStatElement("progress-message", "Please log in to see your personalized progress.");
+    return;
   }
 
-  // Update subscription status in dashboard
-  const subscriptionStatus = document.querySelector(".subscription-badge");
-  if (subscriptionStatus) {
-    subscriptionStatus.textContent = currentUser.subscriptionStatus === 'active' ? 'Premium' : 'Free';
-    subscriptionStatus.className = `subscription-badge ${currentUser.subscriptionStatus}`;
+  // Update stats with real user data
+  updateStatElement("completed-modules", currentUser.completedModules || 0);
+  updateStatElement("user-progress", `${currentUser.progress || 0}%`);
+  updateStatElement("study-hours", currentUser.studyHours || 0);
+  updateStatElement("community-points", currentUser.communityPoints || 0);
+  
+  // Update progress bar
+  const progressBar = document.getElementById("main-progress-bar");
+  if (progressBar) {
+    progressBar.style.width = `${currentUser.progress || 0}%`;
+  }
+  
+  // Update welcome message
+  const userName = currentUser.name ? `, ${currentUser.name}` : "";
+  updateStatElement("user-name-display", userName);
+  
+  // Update progress message based on progress
+  const progress = currentUser.progress || 0;
+  let message;
+  if (progress === 0) {
+    message = "Ready to start your health worker journey? Let's begin!";
+  } else if (progress < 25) {
+    message = "You've made a good start! Keep up the momentum.";
+  } else if (progress < 50) {
+    message = "You're making solid progress! Continue learning.";
+  } else if (progress < 75) {
+    message = "More than halfway there! You're doing great.";
+  } else if (progress < 100) {
+    message = "Almost complete! Push through to the finish line.";
+  } else {
+    message = "Congratulations! You've completed all modules. Keep practicing!";
+  }
+  updateStatElement("progress-message", message);
+
+  // Update subscription status in dashboard if element exists
+  const subscriptionBadge = document.querySelector(".subscription-badge");
+  if (subscriptionBadge) {
+    subscriptionBadge.textContent = currentUser.subscriptionStatus === 'active' ? 'Premium' : 'Free';
+    subscriptionBadge.className = `subscription-badge ${currentUser.subscriptionStatus || 'free'}`;
+  }
+}
+
+// Helper function to safely update elements
+function updateStatElement(elementId, value) {
+  const element = document.getElementById(elementId);
+  if (element) {
+    element.textContent = value;
   }
 }
 
@@ -605,6 +777,8 @@ function updateUserInterface() {
     fill.style.width = currentUser.progress + "%";
   });
 }
+
+// Replace this entire section in your script.js:
 
 // -----------------------
 // AI Assistant
@@ -618,23 +792,40 @@ function initializeAIChat() {
   const aiSection = document.getElementById("ai-assistant");
   if (!aiSection) return;
 
-  aiSection.innerHTML = `
-    <div class="card">
-      <h2>AI Health Assistant</h2>
-      <div id="chat-box" class="chat-box"></div>
-      <div class="chat-input">
-        <input id="chat-message" type="text" placeholder="Type your question..." />
-        <button id="send-chat" class="btn">Send</button>
-      </div>
+  // Instead of replacing all content, add the chat interface to the existing section
+  const chatCard = document.createElement("div");
+  chatCard.className = "card";
+  chatCard.id = "ai-chat-card";
+  chatCard.innerHTML = `
+    <h3>AI Health Assistant Chat</h3>
+    <div id="chat-box" class="chat-box"></div>
+    <div class="chat-input">
+      <input id="chat-message" type="text" placeholder="Type your question..." />
+      <button id="send-chat" class="btn">Send</button>
     </div>
+    <button class="btn btn-secondary" id="close-chat">← Back to AI Tools</button>
   `;
+
+  // Hide existing cards and show chat
+  const existingCards = aiSection.querySelectorAll(".card");
+  existingCards.forEach((card) => (card.style.display = "none"));
+
+  aiSection.appendChild(chatCard);
 
   const input = document.getElementById("chat-message");
   const sendBtn = document.getElementById("send-chat");
+  const closeBtn = document.getElementById("close-chat");
 
   sendBtn.addEventListener("click", () => sendMessage(input.value));
   input.addEventListener("keypress", (e) => {
     if (e.key === "Enter") sendMessage(input.value);
+  });
+
+  // Close chat and return to main AI tools
+  closeBtn.addEventListener("click", () => {
+    chatCard.remove();
+    existingCards.forEach((card) => (card.style.display = "block"));
+    chatInitialized = false; // Allow re-initialization
   });
 }
 
@@ -658,6 +849,10 @@ async function sendMessage(message) {
     if (disclaimer) {
       appendMessage("Note", "⚠️ " + disclaimer.trim(), "disclaimer");
     }
+    
+    
+    updateStatsOnAction('ai_chat_used');
+    
   } catch (err) {
     updateLastAIMessage("⚠️ Error: " + err.message);
   }
@@ -693,29 +888,59 @@ function openSymptomChecker() {
   const aiSection = document.getElementById("ai-assistant");
   if (!aiSection) return;
 
-  aiSection.innerHTML = `
-    <div class="card">
-      <h2>Symptom Checker</h2>
-      <textarea id="symptom-input" rows="4" placeholder="Enter symptoms..."></textarea>
-      <button id="check-symptoms" class="btn">Check</button>
-      <div id="symptom-result" class="symptom-result"></div>
-    </div>
+  const symptomCard = document.createElement("div");
+  symptomCard.className = "card";
+  symptomCard.id = "symptom-checker-card";
+  symptomCard.innerHTML = `
+    <h3>Symptom Checker</h3>
+    <p>Enter your symptoms below and get AI-powered health guidance.</p>
+    <textarea id="symptom-input" rows="4" placeholder="Enter symptoms (e.g., fever, headache, cough)..."></textarea>
+    <button id="check-symptoms" class="btn">Check Symptoms</button>
+    <div id="symptom-result" class="symptom-result"></div>
+    <button class="btn btn-secondary" id="close-symptom-checker">← Back to AI Tools</button>
   `;
+
+  // Hide existing cards and show symptom checker
+  const existingCards = aiSection.querySelectorAll(".card");
+  existingCards.forEach((card) => (card.style.display = "none"));
+
+  aiSection.appendChild(symptomCard);
 
   document
     .getElementById("check-symptoms")
     .addEventListener("click", async () => {
       const symptoms = document.getElementById("symptom-input").value;
-      if (!symptoms.trim()) return;
+      if (!symptoms.trim()) {
+        UTILS.showNotification("Please enter symptoms to check.", "warning");
+        return;
+      }
 
       const resultBox = document.getElementById("symptom-result");
-      resultBox.textContent = "⏳ Checking...";
+      resultBox.innerHTML = "⏳ Analyzing symptoms...";
+
       try {
         const res = await API.checkSymptoms(symptoms);
-        resultBox.textContent = res.result || "No suggestion available.";
+        resultBox.innerHTML = `
+        <div class="symptom-analysis">
+          <h4>Analysis Results:</h4>
+          <p>${
+            res.result ||
+            "No specific suggestions available for these symptoms."
+          }</p>
+          <p class="disclaimer"><strong>⚠️ Disclaimer:</strong> This is not a medical diagnosis. Please consult a healthcare professional for proper medical advice.</p>
+        </div>
+      `;
       } catch (err) {
-        resultBox.textContent = "⚠️ Error: " + err.message;
+        resultBox.innerHTML = `<div class="error">⚠️ Error: ${err.message}</div>`;
       }
+    });
+
+  // Close and return to main AI tools
+  document
+    .getElementById("close-symptom-checker")
+    .addEventListener("click", () => {
+      symptomCard.remove();
+      existingCards.forEach((card) => (card.style.display = "block"));
     });
 }
 
@@ -726,49 +951,78 @@ function openDrugInteractionChecker() {
   const aiSection = document.getElementById("ai-assistant");
   if (!aiSection) return;
 
-  aiSection.innerHTML = `
-    <div class="card">
-      <h2>Drug Interaction Checker</h2>
-      <p>Enter two or more drug names to check for possible interactions.</p>
-      <textarea id="drug-input" rows="3" placeholder="e.g., ibuprofen, paracetamol, aspirin"></textarea>
-      <button id="check-drugs" class="btn">Check Interactions</button>
-      <div id="drug-result" class="drug-result"></div>
-    </div>
+  const drugCard = document.createElement("div");
+  drugCard.className = "card";
+  drugCard.id = "drug-checker-card";
+  drugCard.innerHTML = `
+    <h3>Drug Interaction Checker</h3>
+    <p>Enter two or more drug names to check for possible interactions.</p>
+    <textarea id="drug-input" rows="3" placeholder="e.g., ibuprofen, paracetamol, aspirin (separate with commas)"></textarea>
+    <button id="check-drugs" class="btn">Check Interactions</button>
+    <div id="drug-result" class="drug-result"></div>
+    <button class="btn btn-secondary" id="close-drug-checker">← Back to AI Tools</button>
   `;
 
+  // Hide existing cards and show drug checker
+  const existingCards = aiSection.querySelectorAll(".card");
+  existingCards.forEach((card) => (card.style.display = "none"));
+
+  aiSection.appendChild(drugCard);
+
+  document.getElementById("check-drugs").addEventListener("click", async () => {
+    const input = document.getElementById("drug-input").value;
+    if (!input.trim()) {
+      UTILS.showNotification("Please enter drug names to check.", "warning");
+      return;
+    }
+
+    const drugs = input
+      .split(",")
+      .map((d) => d.trim())
+      .filter(Boolean);
+
+    if (drugs.length < 2) {
+      UTILS.showNotification("Please enter at least two drugs.", "warning");
+      return;
+    }
+
+    const resultBox = document.getElementById("drug-result");
+    resultBox.innerHTML = "⏳ Checking interactions...";
+
+    try {
+      const res = await API.checkDrugInteractions(drugs);
+
+      resultBox.innerHTML = `
+        <div class="interaction-report">
+          <h4>Interaction Analysis:</h4>
+          <p><strong>Drugs checked:</strong> ${
+            res.drugs ? res.drugs.join(", ") : drugs.join(", ")
+          }</p>
+          <p><strong>Severity:</strong> ${res.severity || "Unknown"}</p>
+          <div class="analysis"><strong>Analysis:</strong><br>${
+            res.analysis || "No specific interactions found."
+          }</div>
+          <p class="timestamp"><em>Checked at ${
+            res.timestamp
+              ? UTILS.formatDate(res.timestamp)
+              : new Date().toLocaleString()
+          }</em></p>
+          <p class="disclaimer"><strong>⚠️ Disclaimer:</strong> This is not professional medical advice. Always consult your healthcare provider before taking medications.</p>
+        </div>
+      `;
+    } catch (err) {
+      resultBox.innerHTML = `<div class="error">⚠️ Error: ${err.message}</div>`;
+    }
+  });
+
+  // Close and return to main AI tools
   document
-    .getElementById("check-drugs")
-    .addEventListener("click", async () => {
-      const input = document.getElementById("drug-input").value;
-      if (!input.trim()) return;
-
-      const drugs = input.split(",").map((d) => d.trim()).filter(Boolean);
-
-      if (drugs.length < 2) {
-        UTILS.showNotification("Please enter at least two drugs.", "warning");
-        return;
-      }
-
-      const resultBox = document.getElementById("drug-result");
-      resultBox.textContent = "⏳ Checking interactions...";
-
-      try {
-        const res = await API.checkDrugInteractions(drugs);
-
-        resultBox.innerHTML = `
-          <div class="interaction-report">
-            <p><strong>Drugs checked:</strong> ${res.drugs.join(", ")}</p>
-            <p><strong>Severity:</strong> ${res.severity}</p>
-            <div class="analysis"><strong>Analysis:</strong><br>${res.analysis}</div>
-            <p class="timestamp"><em>Checked at ${UTILS.formatDate(res.timestamp)}</em></p>
-          </div>
-        `;
-      } catch (err) {
-        resultBox.textContent = "⚠️ Error: " + err.message;
-      }
+    .getElementById("close-drug-checker")
+    .addEventListener("click", () => {
+      drugCard.remove();
+      existingCards.forEach((card) => (card.style.display = "block"));
     });
 }
-
 
 // -----------------------
 // Community Features
@@ -841,12 +1095,12 @@ async function loadCommunitySection(section) {
     }
   } catch (error) {
     console.error("Error loading community section:", error);
-    
+
     // Handle authentication errors
     if (handleApiError(error, `Loading ${section}`)) {
       return; // Auth error handled, stop processing
     }
-    
+
     // Handle other errors
     content.innerHTML = `<div class="error">Error loading ${section}: ${error.message}</div>`;
   }
@@ -854,7 +1108,7 @@ async function loadCommunitySection(section) {
 
 async function loadForumPosts() {
   const content = document.getElementById("community-content");
-  
+
   try {
     const posts = await API.getForumPosts();
 
@@ -868,10 +1122,11 @@ async function loadForumPosts() {
         <button class="btn btn-secondary" id="search-btn">Search</button>
       </div>
       <div id="posts-list" class="posts-list">
-        ${posts.posts && posts.posts.length > 0
-          ? posts.posts
-              .map(
-                (post) => `
+        ${
+          posts.posts && posts.posts.length > 0
+            ? posts.posts
+                .map(
+                  (post) => `
           <div class="post-card" data-post-id="${post.id}">
             <h4>${UTILS.sanitizeHtml(post.title)}</h4>
             <p class="post-meta">By ${
@@ -888,9 +1143,9 @@ async function loadForumPosts() {
             </div>
           </div>
         `
-              )
-              .join("")
-          : '<p class="no-content">No posts yet. Be the first to start a discussion!</p>'
+                )
+                .join("")
+            : '<p class="no-content">No posts yet. Be the first to start a discussion!</p>'
         }
       </div>
     `;
@@ -900,7 +1155,7 @@ async function loadForumPosts() {
     if (createBtn) {
       createBtn.addEventListener("click", showCreatePostForm);
     }
-    
+
     const searchBtn = document.getElementById("search-btn");
     if (searchBtn) {
       searchBtn.addEventListener("click", () => {
@@ -916,7 +1171,7 @@ async function loadForumPosts() {
 
 async function loadSuccessStories() {
   const content = document.getElementById("community-content");
-  
+
   try {
     const stories = await API.getSuccessStories();
 
@@ -926,10 +1181,11 @@ async function loadSuccessStories() {
         <button class="btn" id="submit-story-btn">Share Your Story</button>
       </div>
       <div id="stories-list" class="stories-list">
-        ${stories.stories && stories.stories.length > 0
-          ? stories.stories
-              .map(
-                (story) => `
+        ${
+          stories.stories && stories.stories.length > 0
+            ? stories.stories
+                .map(
+                  (story) => `
           <div class="story-card">
             <h4>${UTILS.sanitizeHtml(story.title)}</h4>
             <p class="story-meta">By ${
@@ -941,9 +1197,9 @@ async function loadSuccessStories() {
             )}</p>
           </div>
         `
-              )
-              .join("")
-          : '<p class="no-content">No success stories yet. Share your inspiring story!</p>'
+                )
+                .join("")
+            : '<p class="no-content">No success stories yet. Share your inspiring story!</p>'
         }
       </div>
     `;
@@ -960,7 +1216,7 @@ async function loadSuccessStories() {
 
 async function loadLocalEvents() {
   const content = document.getElementById("community-content");
-  
+
   try {
     const events = await API.getLocalEvents();
 
@@ -970,10 +1226,11 @@ async function loadLocalEvents() {
         <button class="btn" id="create-event-btn">Create Event</button>
       </div>
       <div id="events-list" class="events-list">
-        ${events.events && events.events.length > 0
-          ? events.events
-              .map(
-                (event) => `
+        ${
+          events.events && events.events.length > 0
+            ? events.events
+                .map(
+                  (event) => `
           <div class="event-card">
             <h4>${UTILS.sanitizeHtml(event.title)}</h4>
             <p class="event-meta">
@@ -986,9 +1243,9 @@ async function loadLocalEvents() {
             )}</p>
           </div>
         `
-              )
-              .join("")
-          : '<p class="no-content">No upcoming events. Create one for your community!</p>'
+                )
+                .join("")
+            : '<p class="no-content">No upcoming events. Create one for your community!</p>'
         }
       </div>
     `;
@@ -1003,10 +1260,9 @@ async function loadLocalEvents() {
   }
 }
 
-
 async function loadCommunityStats() {
   const content = document.getElementById("community-content");
-  
+
   try {
     const stats = await API.getCommunityStats();
 
@@ -1037,6 +1293,29 @@ async function loadCommunityStats() {
     console.error("Error loading community stats:", error);
     throw error;
   }
+}
+
+function updateStatsOnAction(action, points = 0) {
+  if (!currentUser) return;
+  
+  switch (action) {
+    case 'post_created':
+      currentUser.communityPoints = (currentUser.communityPoints || 0) + 5;
+      currentUser.postsCount = (currentUser.postsCount || 0) + 1;
+      break;
+    case 'comment_added':
+      currentUser.communityPoints = (currentUser.communityPoints || 0) + 2;
+      currentUser.commentsCount = (currentUser.commentsCount || 0) + 1;
+      break;
+    case 'ai_chat_used':
+      currentUser.communityPoints = (currentUser.communityPoints || 0) + 1;
+      break;
+    case 'custom':
+      currentUser.communityPoints = (currentUser.communityPoints || 0) + points;
+      break;
+  }
+  
+  updateDashboardStats();
 }
 
 // -----------------------
@@ -1096,7 +1375,7 @@ function showCreatePostForm() {
 
   form.addEventListener("submit", async (e) => {
     e.preventDefault();
-    
+
     const title = document.getElementById("post-title").value.trim();
     const content = document.getElementById("post-content").value.trim();
     const category = document.getElementById("post-category").value;
@@ -1107,32 +1386,45 @@ function showCreatePostForm() {
     }
 
     if (title.length < 5) {
-      UTILS.showNotification("Title must be at least 5 characters long.", "warning");
+      UTILS.showNotification(
+        "Title must be at least 5 characters long.",
+        "warning"
+      );
       return;
     }
 
     if (content.length < 10) {
-      UTILS.showNotification("Content must be at least 10 characters long.", "warning");
+      UTILS.showNotification(
+        "Content must be at least 10 characters long.",
+        "warning"
+      );
       return;
     }
 
-    const submitBtn = document.getElementById("submit-post");
-    showLoading(submitBtn);
+      const submitBtn = document.getElementById("submit-post");
+  showLoading(submitBtn);
 
-    try {
-      await API.createForumPost({ title, content, category });
-      UTILS.showNotification("Post created successfully!", "success");
-      loadCommunitySection("posts");
-    } catch (error) {
-      // Use enhanced error handler
-      if (!handleApiError(error, "Create post")) {
-        // Non-auth error, stay on form
-        UTILS.showNotification("Failed to create post: " + error.message, "error");
-      }
-    } finally {
-      hideLoading(submitBtn);
+  try {
+    await API.createForumPost({ title, content, category });
+    UTILS.showNotification("Post created successfully! +5 points earned!", "success");
+    
+    
+    updateStatsOnAction('post_created');
+    
+    loadCommunitySection("posts");
+  } catch (error) {
+    // Use enhanced error handler
+    if (!handleApiError(error, "Create post")) {
+      // Non-auth error, stay on form
+      UTILS.showNotification(
+        "Failed to create post: " + error.message,
+        "error"
+      );
     }
-  });
+  } finally {
+    hideLoading(submitBtn);
+  }
+});
 }
 
 async function addCommentWithSessionHandling(postId, content) {
@@ -1143,14 +1435,17 @@ async function addCommentWithSessionHandling(postId, content) {
   } catch (error) {
     // Use enhanced error handler
     if (!handleApiError(error, "Add comment")) {
-      UTILS.showNotification("Failed to add comment: " + error.message, "error");
+      UTILS.showNotification(
+        "Failed to add comment: " + error.message,
+        "error"
+      );
     }
   }
 }
 
 async function viewPost(postId) {
   const content = document.getElementById("community-content");
-  
+
   try {
     const postData = await API.getForumPost(postId);
 
@@ -1162,15 +1457,18 @@ async function viewPost(postId) {
           <p class="post-meta">By ${
             postData.post.profiles?.name || "Anonymous"
           } • ${UTILS.formatDate(postData.post.created_at)}</p>
-          <div class="post-content">${UTILS.sanitizeHtml(postData.post.content)}</div>
+          <div class="post-content">${UTILS.sanitizeHtml(
+            postData.post.content
+          )}</div>
         </div>
         <div class="comments-section">
           <h4>Comments (${postData.comments?.length || 0})</h4>
           <div id="comments-list">
-            ${postData.comments && postData.comments.length > 0
-              ? postData.comments
-                  .map(
-                    (comment) => `
+            ${
+              postData.comments && postData.comments.length > 0
+                ? postData.comments
+                    .map(
+                      (comment) => `
               <div class="comment">
                 <p class="comment-meta">${
                   comment.profiles?.name || "Anonymous"
@@ -1178,9 +1476,9 @@ async function viewPost(postId) {
                 <p>${UTILS.sanitizeHtml(comment.content)}</p>
               </div>
             `
-                  )
-                  .join("")
-              : '<p class="no-content">No comments yet. Be the first to comment!</p>'
+                    )
+                    .join("")
+                : '<p class="no-content">No comments yet. Be the first to comment!</p>'
             }
           </div>
           <form id="add-comment-form" class="comment-form">
@@ -1196,35 +1494,51 @@ async function viewPost(postId) {
     const commentForm = document.getElementById("add-comment-form");
     commentForm.addEventListener("submit", async (e) => {
       e.preventDefault();
-      
-      const content = document.getElementById("comment-content").value.trim();
-      
-      if (!content) {
-        UTILS.showNotification("Please enter a comment.", "warning");
-        return;
-      }
 
-      if (content.length < 5) {
-        UTILS.showNotification("Comment must be at least 5 characters long.", "warning");
-        return;
-      }
+        const content = document.getElementById("comment-content").value.trim();
 
-      try {
-        await API.addComment(postId, { content });
-        UTILS.showNotification("Comment added successfully!", "success");
-        viewPost(postId); // Reload the post
-      } catch (error) {
-        console.error("Add comment error:", error);
-        if (error.message.includes("Unauthorized") || error.message.includes("401")) {
-          UTILS.showNotification("Session expired, please log in again.", "error");
-          setTimeout(() => {
-            window.location.href = "login.html";
-          }, 2000);
-        } else {
-          UTILS.showNotification("Failed to add comment: " + error.message, "error");
-        }
-      }
-    });
+  if (!content) {
+    UTILS.showNotification("Please enter a comment.", "warning");
+    return;
+  }
+
+  if (content.length < 5) {
+    UTILS.showNotification(
+      "Comment must be at least 5 characters long.",
+      "warning"
+    );
+    return;
+  }
+
+  try {
+    await API.addComment(postId, { content });
+    UTILS.showNotification("Comment added successfully! +2 points earned!", "success");
+    
+    // ✅ ADD THIS LINE - Update stats when comment is added
+    updateStatsOnAction('comment_added');
+    
+    viewPost(postId); // Reload the post
+  } catch (error) {
+    console.error("Add comment error:", error);
+    if (
+      error.message.includes("Unauthorized") ||
+      error.message.includes("401")
+    ) {
+      UTILS.showNotification(
+        "Session expired, please log in again.",
+        "error"
+      );
+      setTimeout(() => {
+        window.location.href = "login.html";
+      }, 2000);
+    } else {
+      UTILS.showNotification(
+        "Failed to add comment: " + error.message,
+        "error"
+      );
+    }
+  }
+});
   } catch (error) {
     console.error("Error viewing post:", error);
     content.innerHTML = `<div class="error">Error loading post: ${error.message}</div>`;
@@ -1233,7 +1547,7 @@ async function viewPost(postId) {
 
 async function searchPosts(query) {
   const content = document.getElementById("community-content");
-  
+
   try {
     const results = await API.searchForumPosts(query);
 
@@ -1242,10 +1556,11 @@ async function searchPosts(query) {
         <h3>Search Results for "${UTILS.sanitizeHtml(query)}"</h3>
         <button class="btn btn-secondary" onclick="loadCommunitySection('posts')">← Back to All Posts</button>
         <div id="search-results-list">
-          ${results.posts && results.posts.length > 0
-            ? results.posts
-                .map(
-                  (post) => `
+          ${
+            results.posts && results.posts.length > 0
+              ? results.posts
+                  .map(
+                    (post) => `
             <div class="post-card" data-post-id="${post.id}">
               <h4>${UTILS.sanitizeHtml(post.title)}</h4>
               <p class="post-meta">By ${
@@ -1262,9 +1577,9 @@ async function searchPosts(query) {
               </div>
             </div>
           `
-                )
-                .join("")
-            : '<p class="no-content">No posts found for your search.</p>'
+                  )
+                  .join("")
+              : '<p class="no-content">No posts found for your search.</p>'
           }
         </div>
       </div>
@@ -1320,7 +1635,7 @@ function showSubmitStoryForm() {
 
   form.addEventListener("submit", async (e) => {
     e.preventDefault();
-    
+
     const title = document.getElementById("story-title").value.trim();
     const story = document.getElementById("story-content").value.trim();
 
@@ -1330,31 +1645,47 @@ function showSubmitStoryForm() {
     }
 
     if (title.length < 10) {
-      UTILS.showNotification("Title must be at least 10 characters long.", "warning");
+      UTILS.showNotification(
+        "Title must be at least 10 characters long.",
+        "warning"
+      );
       return;
     }
 
     if (story.length < 50) {
-      UTILS.showNotification("Story must be at least 50 characters long.", "warning");
+      UTILS.showNotification(
+        "Story must be at least 50 characters long.",
+        "warning"
+      );
       return;
     }
 
     const submitBtn = document.getElementById("submit-story");
-    showLoading(submitBtn);
+  showLoading(submitBtn);
 
-    try {
-      await API.submitSuccessStory({ title, story });
-      UTILS.showNotification("Success story submitted successfully!", "success");
-      loadCommunitySection("stories");
-    } catch (error) {
-      // Use enhanced error handler
-      if (!handleApiError(error, "Submit story")) {
-        UTILS.showNotification("Failed to submit story: " + error.message, "error");
-      }
-    } finally {
-      hideLoading(submitBtn);
+  try {
+    await API.submitSuccessStory({ title, story });
+    UTILS.showNotification(
+      "Success story submitted successfully! +10 points earned!",
+      "success"
+    );
+    
+    // ✅ ADD THIS LINE - Update stats when story is submitted
+    updateStatsOnAction('custom', 10); // 10 points for success story
+    
+    loadCommunitySection("stories");
+  } catch (error) {
+    // Use enhanced error handler
+    if (!handleApiError(error, "Submit story")) {
+      UTILS.showNotification(
+        "Failed to submit story: " + error.message,
+        "error"
+      );
     }
-  });
+  } finally {
+    hideLoading(submitBtn);
+  }
+});
 }
 // -----------------------
 // Events Functions
@@ -1413,45 +1744,71 @@ function showCreateEventForm() {
 
   form.addEventListener("submit", async (e) => {
     e.preventDefault();
-    
+
     const title = document.getElementById("event-title").value.trim();
     const event_date = document.getElementById("event-date").value.trim();
     const event_time = document.getElementById("event-time").value.trim();
     const location = document.getElementById("event-location").value.trim();
-    const description = document.getElementById("event-description").value.trim();
+    const description = document
+      .getElementById("event-description")
+      .value.trim();
 
     if (!title || !event_date || !location) {
-      UTILS.showNotification("Please fill in title, date, and location.", "warning");
+      UTILS.showNotification(
+        "Please fill in title, date, and location.",
+        "warning"
+      );
       return;
     }
 
     if (title.length < 5) {
-      UTILS.showNotification("Title must be at least 5 characters long.", "warning");
+      UTILS.showNotification(
+        "Title must be at least 5 characters long.",
+        "warning"
+      );
       return;
     }
 
     const submitBtn = document.getElementById("submit-event");
-    showLoading(submitBtn);
+  showLoading(submitBtn);
 
-    try {
-      if (API.createEvent) {
-        await API.createEvent({ title, description, event_date, event_time, location });
-      } else {
-        await API.post("/community/events", { title, description, event_date, event_time, location });
-      }
-      UTILS.showNotification("Event created successfully!", "success");
-      loadCommunitySection("events");
-    } catch (error) {
-      // Use enhanced error handler
-      if (!handleApiError(error, "Create event")) {
-        UTILS.showNotification("Failed to create event: " + error.message, "error");
-      }
-    } finally {
-      hideLoading(submitBtn);
+  try {
+    if (API.createEvent) {
+      await API.createEvent({
+        title,
+        description,
+        event_date,
+        event_time,
+        location,
+      });
+    } else {
+      await API.post("/community/events", {
+        title,
+        description,
+        event_date,
+        event_time,
+        location,
+      });
     }
-  });
+    UTILS.showNotification("Event created successfully! +8 points earned!", "success");
+    
+    // ✅ ADD THIS LINE - Update stats when event is created
+    updateStatsOnAction('custom', 8); // 8 points for creating event
+    
+    loadCommunitySection("events");
+  } catch (error) {
+    // Use enhanced error handler
+    if (!handleApiError(error, "Create event")) {
+      UTILS.showNotification(
+        "Failed to create event: " + error.message,
+        "error"
+      );
+    }
+  } finally {
+    hideLoading(submitBtn);
+  }
+});
 }
-
 
 function joinEvent(eventId) {
   UTILS.showNotification(`You joined event ${eventId}`, "success");
@@ -1478,14 +1835,23 @@ function showQuiz(quiz) {
       <div class="quiz-body">
         <div class="quiz-question">
           <h3>Question 1 of ${quiz.questions?.length || 1}</h3>
-          <p>${quiz.questions?.[0]?.question || "Sample quiz question will appear here."}</p>
+          <p>${
+            quiz.questions?.[0]?.question ||
+            "Sample quiz question will appear here."
+          }</p>
           <div class="quiz-options">
-            ${quiz.questions?.[0]?.options?.map((option, index) => `
+            ${
+              quiz.questions?.[0]?.options
+                ?.map(
+                  (option, index) => `
               <label class="quiz-option">
                 <input type="radio" name="quiz-answer" value="${index}">
                 <span>${option}</span>
               </label>
-            `).join('') || `
+            `
+                )
+                .join("") ||
+              `
               <label class="quiz-option">
                 <input type="radio" name="quiz-answer" value="0">
                 <span>Sample answer A</span>
@@ -1498,7 +1864,8 @@ function showQuiz(quiz) {
                 <input type="radio" name="quiz-answer" value="2">
                 <span>Sample answer C</span>
               </label>
-            `}
+            `
+            }
           </div>
         </div>
       </div>
@@ -1514,25 +1881,29 @@ function showQuiz(quiz) {
     history.back();
   });
 
-  document.getElementById("submit-quiz")?.addEventListener("click", async () => {
-    const selectedAnswer = document.querySelector('input[name="quiz-answer"]:checked');
-    if (!selectedAnswer) {
-      UTILS.showNotification("Please select an answer.", "warning");
-      return;
-    }
+  document
+    .getElementById("submit-quiz")
+    ?.addEventListener("click", async () => {
+      const selectedAnswer = document.querySelector(
+        'input[name="quiz-answer"]:checked'
+      );
+      if (!selectedAnswer) {
+        UTILS.showNotification("Please select an answer.", "warning");
+        return;
+      }
 
-    try {
-      // Submit quiz answer (implement based on your API)
-      UTILS.showNotification("Quiz submitted successfully!", "success");
-      // Could redirect back to module or show results
-      history.back();
-    } catch (e) {
-      UTILS.showNotification("Failed to submit quiz", "error");
-    }
-  });
+      try {
+        // Submit quiz answer (implement based on your API)
+        UTILS.showNotification("Quiz submitted successfully!", "success");
+        // Could redirect back to module or show results
+        history.back();
+      } catch (e) {
+        UTILS.showNotification("Failed to submit quiz", "error");
+      }
+    });
 }
 
-// Add these functions to script.js
+
 
 async function handleSubscription(planId) {
   const token = UTILS.getFromLocal("auth_token");
@@ -1546,18 +1917,21 @@ async function handleSubscription(planId) {
 
   try {
     const result = await API.createSubscription(planId);
-    
+
     // Update user subscription status
     if (currentUser) {
-      currentUser.subscriptionStatus = 'active';
+      currentUser.subscriptionStatus = "active";
       currentUser.subscriptionPlan = planId;
     }
-    
+
     updateSubscriptionUI();
     UTILS.showNotification("Subscription activated successfully!", "success");
   } catch (error) {
     if (!handleApiError(error, "Create subscription")) {
-      UTILS.showNotification("Failed to create subscription: " + error.message, "error");
+      UTILS.showNotification(
+        "Failed to create subscription: " + error.message,
+        "error"
+      );
     }
   }
 }
@@ -1566,31 +1940,34 @@ function updateSubscriptionUI() {
   const statusDiv = document.getElementById("subscription-status");
   if (!statusDiv || !currentUser) return;
 
-  const isActive = currentUser.subscriptionStatus === 'active';
-  
-  statusDiv.className = `subscription-status ${isActive ? 'subscription-active' : 'subscription-inactive'}`;
+  const isActive = currentUser.subscriptionStatus === "active";
+
+  statusDiv.className = `subscription-status ${
+    isActive ? "subscription-active" : "subscription-inactive"
+  }`;
   statusDiv.innerHTML = `
-    <h4>Current Status: ${isActive ? 'Premium Member' : 'Free Member'}</h4>
-    ${isActive 
-      ? `<p>You have access to all premium features!</p>
+    <h4>Current Status: ${isActive ? "Premium Member" : "Free Member"}</h4>
+    ${
+      isActive
+        ? `<p>You have access to all premium features!</p>
          <button class="btn btn-secondary" id="cancel-subscription">Cancel Subscription</button>`
-      : '<p>Upgrade to premium for unlimited access to all features.</p>'
+        : "<p>Upgrade to premium for unlimited access to all features.</p>"
     }
   `;
 
   // Update plan cards
-  document.querySelectorAll('.plan-card').forEach(card => {
-    const button = card.querySelector('.btn');
+  document.querySelectorAll(".plan-card").forEach((card) => {
+    const button = card.querySelector(".btn");
     const planType = button?.dataset.plan;
-    
-    if (isActive && planType === 'premium') {
-      button.textContent = 'Current Plan';
+
+    if (isActive && planType === "premium") {
+      button.textContent = "Current Plan";
       button.disabled = true;
-      button.className = 'btn btn-secondary';
-    } else if (!isActive && planType === 'premium') {
-      button.textContent = 'Subscribe Now';
+      button.className = "btn btn-secondary";
+    } else if (!isActive && planType === "premium") {
+      button.textContent = "Subscribe Now";
       button.disabled = false;
-      button.className = 'btn';
+      button.className = "btn";
     }
   });
 
@@ -1602,7 +1979,7 @@ function updateSubscriptionUI() {
         try {
           await API.cancelSubscription();
           if (currentUser) {
-            currentUser.subscriptionStatus = 'free';
+            currentUser.subscriptionStatus = "free";
             currentUser.subscriptionPlan = null;
           }
           updateSubscriptionUI();
@@ -1616,8 +1993,11 @@ function updateSubscriptionUI() {
 
 // Add subscription requirement check for premium features
 function checkSubscriptionAccess(featureName) {
-  if (!currentUser || currentUser.subscriptionStatus !== 'active') {
-    UTILS.showNotification(`${featureName} requires a premium subscription. Please upgrade to access this feature.`, "warning");
+  if (!currentUser || currentUser.subscriptionStatus !== "active") {
+    UTILS.showNotification(
+      `${featureName} requires a premium subscription. Please upgrade to access this feature.`,
+      "warning"
+    );
     showSection("subscription");
     return false;
   }
@@ -1661,17 +2041,19 @@ function animateProgressBars() {
 function checkUrlHash() {
   const hash = window.location.hash.substring(1);
   if (!hash) return;
-  
+
   // Handle nested routes like #training/module-id
   const [section, moduleId] = hash.split("/");
-  
+
   if (section && document.getElementById(section)) {
     if (section === "training" && moduleId) {
       // Handle direct module access
       showSection("training", true);
       // Load the specific module if needed
       setTimeout(() => {
-        const moduleBtn = document.querySelector(`[data-module-id="${decodeURIComponent(moduleId)}"]`);
+        const moduleBtn = document.querySelector(
+          `[data-module-id="${decodeURIComponent(moduleId)}"]`
+        );
         if (moduleBtn) {
           startTrainingModule(moduleBtn);
         }
@@ -1684,7 +2066,8 @@ function checkUrlHash() {
 
 function checkNotifications() {
   setTimeout(
-    () => UTILS.showNotification("Welcome to HealthGuide Community!", "success"),
+    () =>
+      UTILS.showNotification("Welcome to HealthGuide Community!", "success"),
     1500
   );
 }
@@ -1706,7 +2089,9 @@ function handleOffline() {
 function navigateToTraining() {
   showSection("training");
   setTimeout(() => {
-    const incompleteModule = document.querySelector('.progress-fill[style*="60%"], .progress-fill[style*="0%"]');
+    const incompleteModule = document.querySelector(
+      '.progress-fill[style*="60%"], .progress-fill[style*="0%"]'
+    );
     if (incompleteModule) {
       incompleteModule
         .closest(".card")
@@ -1757,22 +2142,20 @@ function setupEventListeners() {
         break;
 
       // AI Tools
-      case "chat-ai":
+      
+      case "ai-chat":
       case "Start Chat with AI":
         showSection("ai-assistant");
-        if (!chatInitialized) {
-          initializeAIChat();
-        }
+        initializeAIChat();
         break;
 
       case "symptom-checker":
-      case "Open Symptom Checker":
+      case "Start Symptom Checker":
         showSection("ai-assistant");
         openSymptomChecker();
         break;
 
       case "drug-checker":
-      case "Drug Interaction Checker":
       case "Check Interactions":
         showSection("ai-assistant");
         openDrugInteractionChecker();
@@ -1815,11 +2198,11 @@ function setupEventListeners() {
         loadCommunitySection("events");
         break;
 
-        case "subscribe":
-        case "Subscribe Now":
+      case "subscribe":
+      case "Subscribe Now":
         const planId = btn.dataset.plan;
-          if (planId) {
-         handleSubscription(planId);
+        if (planId) {
+          handleSubscription(planId);
         }
         break;
 
@@ -1838,14 +2221,14 @@ function setupEventListeners() {
 // -----------------------
 window.addEventListener("popstate", (e) => {
   const hash = window.location.hash.substring(1);
-  
+
   if (!hash) {
     showSection("dashboard", true);
     return;
   }
-  
+
   const [section, moduleId] = hash.split("/");
-  
+
   if (section === "training" && !moduleId) {
     // Going back to training section from module view
     const moduleView = document.getElementById("module-view");
@@ -1854,7 +2237,10 @@ window.addEventListener("popstate", (e) => {
       moduleView.hidden = true;
     }
     showSection("training", true);
-  } else if (section === "module-view" || (section === "training" && moduleId)) {
+  } else if (
+    section === "module-view" ||
+    (section === "training" && moduleId)
+  ) {
     // Module view is being accessed
     // The showModule function should handle this
   } else if (section && document.getElementById(section)) {

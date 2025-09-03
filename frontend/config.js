@@ -387,6 +387,17 @@ const API = {
     }
   },
 
+  async getCommunityActivity() {
+  return this.get('/users/community-activity');
+},
+
+async updateStudyTime(moduleId, timeSpent) {
+  return this.post('/users/study-time', { 
+    module_id: moduleId, 
+    time_spent: timeSpent 
+  });
+},
+
   // ===== TRAINING =====
 async getTrainingModules() {
   try {
