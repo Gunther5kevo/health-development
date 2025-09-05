@@ -391,6 +391,22 @@ const API = {
   return this.get('/users/community-activity');
 },
 
+
+requestPasswordReset: async (email) => {
+  try {
+    const response = await fetch(`${API_BASE}/auth/forgot-password`, {  // ✅ FIXED: API_BASE instead of API.BASE_URL
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ email })
+    });
+    return await response.json();
+  } catch (error) {
+    throw new Error('Network error. Please try again.');
+  }
+},
+
 async updateStudyTime(moduleId, timeSpent) {
   return this.post('/users/study-time', { 
     module_id: moduleId, 
@@ -592,16 +608,38 @@ async checkDrugInteractions(drugs) {
 // ===== SUBSCRIPTION MANAGEMENT =====
 async createSubscription(planId) {
   try {
-    const result = await this.post("/payments/create-subscription", { plan: planId });
-    UTILS.showNotification("Subscription created successfully!", "success");
-    return result;
+    const token = UTILS.getFromLocal("auth_token");
+
+    const result = await fetch(`${API_BASE}/payments/create-subscription`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${token}`,   // 🔑 important
+      },
+      body: JSON.stringify({ plan: planId }),
+    });
+
+    if (!result.ok) {
+      const errorData = await result.json();
+      throw new Error(errorData.error || "Subscription creation failed");
+    }
+
+    return await result.json();
   } catch (error) {
     console.error("Failed to create subscription:", error);
-    UTILS.showNotification("Failed to create subscription: " + error.message, "error");
     throw error;
   }
 },
 
+async getMySubscription() {
+    const token = UTILS.getFromLocal("auth_token");
+    const resp = await fetch(`${CONFIG.API_BASE}/payments/my-subscription`, {
+      headers: { "Authorization": `Bearer ${token}` }
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
+  },
+  
 async getSubscriptionStatus() {
   try {
     return await this.get("/users/subscription-status");

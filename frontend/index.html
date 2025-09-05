@@ -210,41 +210,87 @@
         </div>
       </div>
       <div id="subscription" class="section">
-        <div class="card">
-          <h3>Subscription Plans</h3>
-          <p>Choose a plan that works for you</p>
+  <div class="card">
+    <h3>Subscription Plans</h3>
+    <p>Choose a plan that works for your community health work</p>
 
-          <div class="subscription-plans">
-            <div class="plan-card free">
-              <h4>Free Plan</h4>
-              <div class="plan-price">$0<span>/month</span></div>
-              <ul class="plan-features">
-                <li>✓ Basic training modules</li>
-                <li>✓ AI assistant (limited)</li>
-                <li>✓ Community access</li>
-                <li>✗ Premium modules</li>
-                <li>✗ Priority support</li>
-              </ul>
-              <button class="btn btn-secondary" disabled>Current Plan</button>
-            </div>
+    <div class="subscription-plans">
+  <!-- Free Plan -->
+  <div class="plan-card free">
+    <h4>Free Plan</h4>
+    <div class="plan-price">KES 0<span>/month</span></div>
+    <ul class="plan-features">
+      <li>✓ 3 basic training modules</li>
+      <li>✓ AI assistant (5 questions/day)</li>
+      <li>✓ Community access</li>
+      <li>✓ Basic symptom checker</li>
+      <li>✗ Premium modules</li>
+      <li>✗ Unlimited AI assistant</li>
+      <li>✗ Priority support</li>
+    </ul>
+    <button class="btn btn-secondary" data-plan="free">Current Plan</button>
+  </div>
 
-            <div class="plan-card premium">
-              <h4>Premium Plan</h4>
-              <div class="plan-price">KES 500<span>/month</span></div>
-              <ul class="plan-features">
-                <li>✓ All training modules</li>
-                <li>✓ Unlimited AI assistant</li>
-                <li>✓ Premium community features</li>
-                <li>✓ Advanced analytics</li>
-                <li>✓ Priority support</li>
-              </ul>
-              <button class="btn" data-plan="premium">Subscribe Now</button>
-            </div>
-          </div>
+  <!-- Basic Plan -->
+  <div class="plan-card basic">
+    <h4>Basic Plan</h4>
+    <div class="plan-price">KES 500<span>/month</span></div>
+    <ul class="plan-features">
+      <li>✓ 10 training modules</li>
+      <li>✓ AI assistant (50 questions/day)</li>
+      <li>✓ Symptom checker</li>
+      <li>✓ Community access</li>
+      <li>✗ Advanced analytics</li>
+      <li>✗ Priority support</li>
+    </ul>
+    <button class="btn" data-plan="R08NOK8">Subscribe Now</button>
+  </div>
 
-          <div id="subscription-status" class="subscription-status">
-            <!-- Status will be populated by JavaScript -->
-          </div>
+  <!-- Premium Plan -->
+  <div class="plan-card premium recommended">
+    <div class="recommended-badge">Most Popular</div>
+    <h4>Premium Plan</h4>
+    <div class="plan-price">KES 1000<span>/month</span></div>
+    <ul class="plan-features">
+      <li>✓ All 15+ training modules</li>
+      <li>✓ Unlimited AI assistant</li>
+      <li>✓ Advanced drug interaction checker</li>
+      <li>✓ Premium community features</li>
+      <li>✓ Offline content access</li>
+      <li>✓ Advanced analytics</li>
+      <li>✓ Priority support</li>
+      <li>✓ Monthly webinars</li>
+    </ul>
+    <button class="btn" data-plan="B0X2DK5">Subscribe Now</button>
+  </div>
+</div>
+
+
+    <div id="subscription-status" class="subscription-status">
+      <div class="loading">Loading subscription status...</div>
+    </div>
+
+    <div class="subscription-benefits">
+      <h4>Why Upgrade to Premium?</h4>
+      <div class="benefits-grid">
+        <div class="benefit-item">
+          <h5>🎓 Complete Training</h5>
+          <p>Access all specialized modules including maternal health, emergency care, and more.</p>
+        </div>
+        <div class="benefit-item">
+          <h5>🤖 Unlimited AI Support</h5>
+          <p>Ask as many health questions as you need with our AI assistant.</p>
+        </div>
+        <div class="benefit-item">
+          <h5>📱 Offline Access</h5>
+          <p>Download content for offline use in areas with poor connectivity.</p>
+        </div>
+        <div class="benefit-item">
+          <h5>👥 Priority Support</h5>
+          <p>Get faster responses and dedicated support for your questions.</p>
+        </div>
+        </div>
+       </div>
         </div>
       </div>
 

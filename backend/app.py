@@ -19,7 +19,8 @@ app = Flask(__name__)
 
 
 INTASEND_SECRET_KEY = os.getenv("INTASEND_SECRET_KEY")
-API_BASE = "https://sandbox.intasend.com/api/v1"
+API_BASE = "https://payment.intasend.com/api/v1"
+
 
 # Environment config
 FLASK_ENV = os.getenv('FLASK_ENV', 'development')
@@ -446,6 +447,7 @@ def register():
     location = data.get('location')
     role = data.get('role', 'health_worker')
 
+    # Validate inputs
     if not email or not password or not name or not location:
         return jsonify({'error': 'Missing required fields'}), 400
 
@@ -486,12 +488,14 @@ def register():
             "supabase_response": resp_json
         }), 201
 
-    # Insert into profiles table with correct ID
+    # Insert into profiles table with correct ID + email
     supabase_request('POST', 'profiles', {
         'id': user["id"],
         'name': name,
         'location': location,
-        'role': role
+        'role': role,
+        'email': email,                  # 👈 now saved
+        'intasend_customer_id': None     # 👈 placeholder for later
     }, use_service_key=True)
 
     return jsonify({
@@ -556,8 +560,103 @@ def login():
         "user": user
     }), 200
 
+@app.route('/api/auth/forgot-password', methods=['POST'])
+def forgot_password():
+    data = request.get_json()
+    email = data.get('email')
+    
+    if not email:
+        return jsonify({'error': {'message': 'Email is required'}}), 400
+    
+    try:
+        # Supabase password reset endpoint
+        url = f"{SUPABASE_URL}/auth/v1/recover"
+        headers = {
+            "apikey": SUPABASE_KEY,
+            "Content-Type": "application/json"
+        }
+        payload = {
+            "email": email,
+            "options": {
+                "redirectTo": "https://health-development.netlify.app/reset-password.html"
+            }
+        }
+        
+        resp = requests.post(url, headers=headers, json=payload, timeout=10)
+        
+        if resp.status_code == 200:
+            return jsonify({
+                "success": True,
+                "message": "If this email exists, a reset link has been sent"
+            }), 200
+        else:
+            return jsonify({
+                "success": True,  # Still return success for security
+                "message": "If this email exists, a reset link has been sent"
+            }), 200
+            
+    except Exception as e:
+        return jsonify({
+            'error': {'message': 'An error occurred. Please try again.'}
+        }), 500
 
-
+@app.route('/api/auth/reset-password', methods=['POST'])
+def reset_password():
+    data = request.get_json()
+    access_token = data.get('access_token')  # From URL params or request body
+    new_password = data.get('password')
+    
+    if not access_token or not new_password:
+        return jsonify({'error': {'message': 'Access token and new password are required'}}), 400
+    
+    # Validate password strength
+    if len(new_password) < 8:
+        return jsonify({'error': {'message': 'Password must be at least 8 characters long'}}), 400
+    
+    try:
+        # Supabase password update endpoint
+        url = f"{SUPABASE_URL}/auth/v1/user"
+        headers = {
+            "apikey": SUPABASE_KEY,
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {access_token}"  # User's access token from email link
+        }
+        payload = {
+            "password": new_password
+        }
+        
+        resp = requests.put(url, headers=headers, json=payload, timeout=10)
+        
+        if resp.status_code == 200:
+            return jsonify({
+                "success": True,
+                "message": "Password updated successfully"
+            }), 200
+        elif resp.status_code == 401:
+            return jsonify({
+                'error': {'message': 'Invalid or expired reset token'}
+            }), 401
+        else:
+            print(f"Supabase reset password error: {resp.status_code} - {resp.text}")
+            return jsonify({
+                'error': {'message': 'Failed to update password. Please try again.'}
+            }), 400
+            
+    except requests.exceptions.Timeout:
+        return jsonify({
+            'error': {'message': 'Request timeout. Please try again.'}
+        }), 500
+    except requests.exceptions.RequestException as e:
+        print(f"Network error in reset password: {e}")
+        return jsonify({
+            'error': {'message': 'Network error. Please try again.'}
+        }), 500
+    except Exception as e:
+        print(f"Unexpected error in reset password: {e}")
+        return jsonify({
+            'error': {'message': 'An error occurred. Please try again.'}
+        }), 500
+    
 @app.route('/api/users/profile', methods=['GET'])
 @token_required
 def get_profile(current_user_id):
@@ -578,57 +677,231 @@ def get_profile(current_user_id):
     
     return jsonify({'profile': profile[0]}), 200
 
+@app.route("/api/payments/test-intasend", methods=["GET"])
+def test_intasend():
+    try:
+        resp = requests.get(
+            f"{API_BASE}/plans/",
+            headers={"Authorization": f"Bearer {INTASEND_SECRET_KEY}"}
+        )
+        return jsonify({
+            "status_code": resp.status_code,
+            "response": resp.json()
+        }), resp.status_code
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/api/payments/plans", methods=["GET"])
+@token_required
+def list_plans(current_user_id):
+    try:
+        resp = requests.get(
+            f"{API_BASE}/subscriptions-plans/",
+            headers={"Authorization": f"Bearer {INTASEND_SECRET_KEY}"}
+        )
+
+        if resp.status_code != 200:
+            return jsonify({"error": resp.text}), resp.status_code
+
+        return jsonify(resp.json()), 200
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 
 @app.route("/api/payments/create-subscription", methods=["POST"])
 @token_required
 def create_subscription(current_user_id):
-    data = request.get_json()
-    plan_id = data.get("plan")
+    try:
+        data = request.get_json() or {}
+        plan_id = data.get("plan")
 
-    resp = requests.post(f"{API_BASE}/subscriptions/", 
-        headers={"Authorization": f"Bearer {INTASEND_SECRET_KEY}"},
-        json={
-            "plan": plan_id,
-            "customer": {"user_id": current_user_id}
-        })
+        if not plan_id:
+            return jsonify({"error": "Plan ID is required"}), 400
 
-    if resp.status_code != 200:
-        return jsonify({"error": resp.text}), resp.status_code
-
-    sub = resp.json()
-    # Save subscription ID to Supabase – similar to Stripe flow
-    supabase_request("POST", "subscriptions", {
-        "user_id": current_user_id,
-        "status": "active",
-        "intasend_subscription_id": sub["id"]
-    }, use_service_key=True)
-
-    return jsonify(sub), 200
-def subscription_required(f):
-    @wraps(f)
-    def decorated(current_user_id, *args, **kwargs):
-        subs = supabase_request(
-            "GET", f"subscriptions?user_id=eq.{current_user_id}&status=eq.active"
+        # 1️⃣ Get user profile
+        profiles = supabase_request(
+            "GET",
+            f"profiles?id=eq.{current_user_id}",
+            use_service_key=True
         )
-        if not subs:
-            return jsonify({"error": "Active subscription required"}), 403
-        return f(current_user_id, *args, **kwargs)
-    return decorated
+        if not profiles:
+            return jsonify({"error": "Profile not found"}), 404
+
+        profile = profiles[0]
+        customer_id = profile.get("intasend_customer_id")
+
+        # 2️⃣ If customer missing, create in IntaSend
+        if not customer_id:
+            fake_email = f"{current_user_id}@yourapp.local"
+            fake_first = "User"
+            fake_last = str(current_user_id)[:8]
+
+            customer_resp = requests.post(
+                f"{API_BASE}/subscriptions-customers/",
+                headers={
+                    "Authorization": f"Bearer {INTASEND_SECRET_KEY.strip()}",
+                    "Content-Type": "application/json"
+                },
+                json={
+                    "email": fake_email,
+                    "first_name": fake_first,
+                    "last_name": fake_last
+                }
+            )
+
+            print("DEBUG: Create customer response:", customer_resp.status_code, customer_resp.text)
+
+            if customer_resp.status_code != 200:
+                return jsonify({"error": customer_resp.text}), customer_resp.status_code
+
+            customer_id = customer_resp.json().get("customer_id")
+
+            # Save to Supabase
+            supabase_request(
+                "PATCH",
+                f"profiles?id=eq.{current_user_id}",
+                {"intasend_customer_id": customer_id},
+                use_service_key=True
+            )
+
+        # 3️⃣ Create subscription in IntaSend
+        payload = {
+            "customer_id": customer_id,
+            "plan_id": plan_id,
+            "reference": f"user-{current_user_id}-{datetime.now().timestamp()}",
+            "start_date": datetime.now().strftime("%Y-%m-%d"),
+            "redirect_url": "https://health-development.netlify.app/subscription-success.html"
+        }
+
+        print("DEBUG: Payload to IntaSend:", payload)
+
+        resp = requests.post(
+            f"{API_BASE}/subscriptions/",
+            headers={
+                "Authorization": f"Bearer {INTASEND_SECRET_KEY.strip()}",
+                "Content-Type": "application/json"
+            },
+            json=payload
+        )
+
+        print("DEBUG: Subscription response:", resp.status_code, resp.text)
+
+        if resp.status_code != 200:
+            return jsonify({"error": resp.text}), resp.status_code
+
+        sub = resp.json()
+
+        # 4️⃣ Save subscription in Supabase
+        supabase_request(
+            "POST",
+            "subscriptions",
+            {
+                "user_id": current_user_id,
+                "status": "pending",
+                "plan": plan_id,
+                "intasend_subscription_id": sub.get("subscription_id"),
+                "created_at": datetime.now(timezone.utc).isoformat(),
+                "updated_at": datetime.now(timezone.utc).isoformat()
+            },
+            use_service_key=True
+        )
+
+        return jsonify({
+            "status": "pending",
+            "plan": plan_id,
+            "intasend_subscription_id": sub.get("subscription_id"),
+            "checkout_url": sub.get("setup_url"),
+            "user_id": current_user_id
+        }), 200
+
+    except Exception as e:
+        print(f"Subscription creation error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/api/payments/my-subscription", methods=["GET"])
+@token_required
+def get_my_subscription(current_user_id):
+    subs = supabase_request(
+        "GET",
+        f"subscriptions?user_id=eq.{current_user_id}&order=created_at.desc&limit=1",
+        use_service_key=True
+    )
+    if not subs:
+        return jsonify({"status": "free"}), 200
+    return jsonify(subs[0]), 200
+
+
+@app.route("/api/payments/cancel-subscription", methods=["POST"])
+@token_required
+def cancel_subscription(current_user_id):
+    try:
+        # 1. Find active subscription in Supabase
+        subs = supabase_request(
+            "GET",
+            f"subscriptions?user_id=eq.{current_user_id}&status=eq.active",
+            use_service_key=True
+        )
+        if not subs or len(subs) == 0:
+            return jsonify({"error": "No active subscription found"}), 404
+
+        subscription = subs[0]
+        intasend_id = subscription.get("intasend_subscription_id")
+
+        # 2. Cancel on IntaSend
+        if intasend_id:
+            resp = requests.post(
+                f"{API_BASE}/subscriptions/{intasend_id}/cancel/",
+                headers={"Authorization": f"Token {INTASEND_SECRET_KEY}"}
+            )
+            if resp.status_code not in (200, 204):
+                print("IntaSend cancel error:", resp.text)
+
+        # 3. Update Supabase status
+        supabase_request(
+            "PATCH",
+            "subscriptions",
+            {
+                "status": "cancelled",
+                "updated_at": datetime.now(timezone.utc).isoformat()
+            },
+            params={"and": f"(user_id.eq.{current_user_id},status.eq.active)"},
+            use_service_key=True
+        )
+
+        return jsonify({"message": "Subscription cancelled successfully"}), 200
+
+    except Exception as e:
+        print(f"Cancel subscription error: {e}")
+        return jsonify({"error": str(e)}), 500
+
 
 @app.route("/api/users/subscription-status", methods=["GET"])
 @token_required
 def subscription_status(current_user_id):
-    subs = supabase_request(
-        "GET", f"subscriptions?user_id=eq.{current_user_id}&status=eq.active", 
-        use_service_key=True
-    )
-    
-    if not subs:
-        return jsonify({"status": "inactive"}), 200
-    
-    # You could expand this with plan, expiry, etc.
-    return jsonify({"status": "active", "subscription": subs[0]}), 200
+    try:
+        subs = supabase_request(
+            "GET", f"subscriptions?user_id=eq.{current_user_id}&status=eq.active",
+            use_service_key=True
+        )
 
+        if not subs or len(subs) == 0:
+            return jsonify({"status": "inactive"}), 200
+
+        subscription = subs[0]
+        return jsonify({
+            "status": "active",
+            "subscription": {
+                "id": subscription.get("id"),
+                "plan": subscription.get("plan", "premium"),
+                "created_at": subscription.get("created_at"),
+                "intasend_subscription_id": subscription.get("intasend_subscription_id")
+            }
+        }), 200
+
+    except Exception as e:
+        print(f"Subscription status error: {e}")
+        return jsonify({"status": "inactive", "error": str(e)}), 200
 
 # Training modules list
 @app.route('/api/training/modules', methods=['GET'])

@@ -627,47 +627,67 @@ function isAuthError(error) {
   const message = String(error.message || error.toString()).toLowerCase();
   const status = error.status || error.statusCode;
 
-  return (
-    status === 401 ||
-    status === 403 ||
+  // Be more specific about what constitutes an auth error
+  // Don't treat payment/subscription errors as auth errors
+  const isAuthStatus = status === 401 || status === 403;
+  const hasAuthKeywords = (
     message.includes("unauthorized") ||
     message.includes("forbidden") ||
-    message.includes("token") ||
-    message.includes("session") ||
-    message.includes("expired") ||
-    message.includes("invalid credentials")
+    message.includes("invalid token") ||
+    message.includes("token expired") ||
+    message.includes("session expired") ||
+    message.includes("invalid credentials") ||
+    message.includes("authentication required")
   );
+
+  // Exclude subscription/payment related errors from auth errors
+  const isSubscriptionError = (
+    message.includes("payment") ||
+    message.includes("subscription") ||
+    message.includes("billing") ||
+    message.includes("plan") ||
+    message.includes("stripe") ||
+    message.includes("paypal")
+  );
+
+  return (isAuthStatus || hasAuthKeywords) && !isSubscriptionError;
 }
 
 async function refreshProfileFromBackend() {
   try {
     const data = await API.getProfile();
     if (!data?.profile) return;
-    
+
+    // Initialize currentUser with defaults
     currentUser = {
       id: data.profile.id,
       name: data.profile.name,
       email: data.profile.email,
       progress: 0,
       completedModules: 0,
-      totalModules: 8, // You can make this dynamic too
+      totalModules: 8, // can be dynamic if API supports
       studyHours: 0,
       communityPoints: 0,
       location: data.profile.location,
       subscriptionStatus: 'free',
+      subscriptionPlan: 'free',
       joinedDate: data.profile.created_at,
     };
-    
-    // Get subscription status
+
+    // 🔹 Fetch subscription status
     try {
       const subscriptionData = await API.getSubscriptionStatus();
-      currentUser.subscriptionStatus = subscriptionData.status || 'free';
-      currentUser.subscriptionPlan = subscriptionData.plan || null;
+      if (subscriptionData?.status) {
+        currentUser.subscriptionStatus = subscriptionData.status; // e.g. 'active', 'expired', 'canceled'
+        currentUser.subscriptionPlan =
+          subscriptionData.subscription?.plan || subscriptionData.plan || 'free';
+        currentUser.subscriptionExpiry = subscriptionData.subscription?.expiry_date || null;
+      }
     } catch (error) {
-      console.log("Could not fetch subscription status:", error.message);
+      console.warn("Could not fetch subscription status:", error.message);
     }
-    
-    // Get progress data
+
+    // 🔹 Fetch progress data
     try {
       const progressData = await API.getProgress();
       if (progressData?.progress) {
@@ -676,17 +696,17 @@ async function refreshProfileFromBackend() {
         currentUser.progress = Math.round(
           (currentUser.completedModules / currentUser.totalModules) * 100
         );
-        
-        // Calculate study hours (example calculation)
+
+        // Example calculation for study hours
         currentUser.studyHours = completedModules.reduce((total, module) => {
-          return total + (module.study_time || 2); // Default 2 hours per module
+          return total + (module.study_time || 2); // default 2 hours/module
         }, 0);
       }
     } catch (error) {
-      console.log("Could not fetch progress data:", error.message);
+      console.warn("Could not fetch progress data:", error.message);
     }
-    
-    // Get community activity data
+
+    // 🔹 Fetch community activity
     try {
       const communityData = await API.getCommunityActivity();
       if (communityData) {
@@ -695,19 +715,24 @@ async function refreshProfileFromBackend() {
         currentUser.commentsCount = communityData.comments_count || 0;
       }
     } catch (error) {
-      console.log("Could not fetch community data:", error.message);
+      console.warn("Could not fetch community data:", error.message);
     }
-    
+
+    // 🔹 Update UI
     updateUserInterface();
     updateDashboardStats();
-    
-  } catch (error) {
-    if (handleApiError(error, "Profile refresh")) {
-      return;
+
+    // Update subscription-specific UI if it exists
+    if (document.getElementById("subscription-status")) {
+      updateSubscriptionUI(currentUser);
     }
-    console.log("Profile refresh failed:", error.message);
+
+  } catch (error) {
+    if (handleApiError(error, "Profile refresh")) return;
+    console.error("Profile refresh failed:", error.message);
   }
 }
+
 
 function updateDashboardStats() {
   if (!currentUser) {
@@ -778,7 +803,7 @@ function updateUserInterface() {
   });
 }
 
-// Replace this entire section in your script.js:
+
 
 // -----------------------
 // AI Assistant
@@ -1915,76 +1940,123 @@ async function handleSubscription(planId) {
     return;
   }
 
-  try {
-    const result = await API.createSubscription(planId);
+  const button = document.querySelector(`[data-plan="${planId}"]`);
+  if (button) showLoading(button);
 
-    // Update user subscription status
+  try {
+    console.log("Attempting subscription creation...");
+
+    // Call backend
+    const data = await API.createSubscription(planId);
+
+    if (data.checkout_url) {
+      // ✅ Redirect user to IntaSend checkout page
+      window.location.href = data.checkout_url;
+      return;
+    }
+
+    // fallback: if backend already activated subscription
     if (currentUser) {
       currentUser.subscriptionStatus = "active";
       currentUser.subscriptionPlan = planId;
+      UTILS.saveToLocal("user_data", currentUser);
     }
 
     updateSubscriptionUI();
+    updateDashboardStats();
     UTILS.showNotification("Subscription activated successfully!", "success");
+
   } catch (error) {
-    if (!handleApiError(error, "Create subscription")) {
-      UTILS.showNotification(
-        "Failed to create subscription: " + error.message,
-        "error"
-      );
+    console.error("Subscription error:", error);
+
+    let errorMessage = error.message || "Failed to create subscription.";
+    if (errorMessage.includes("payment")) {
+      errorMessage = "Payment failed. Please try again.";
+    } else if (errorMessage.includes("invalid plan")) {
+      errorMessage = "Invalid subscription plan selected.";
     }
+    UTILS.showNotification(errorMessage, "error");
+  } finally {
+    if (button) hideLoading(button);
   }
 }
 
+// Update the updateSubscriptionUI function
 function updateSubscriptionUI() {
   const statusDiv = document.getElementById("subscription-status");
-  if (!statusDiv || !currentUser) return;
+  if (!statusDiv) return;
 
-  const isActive = currentUser.subscriptionStatus === "active";
+  const isActive = currentUser?.subscriptionStatus === "active";
+  const planType = currentUser?.subscriptionPlan || "free";
+
+  let planLabel = "Free Member";
+  if (isActive && planType === "R08NOK8") {
+    planLabel = "Basic Member";
+  } else if (isActive && planType === "B0X2DK5") {
+    planLabel = "Premium Member";
+  }
 
   statusDiv.className = `subscription-status ${
     isActive ? "subscription-active" : "subscription-inactive"
   }`;
+
   statusDiv.innerHTML = `
-    <h4>Current Status: ${isActive ? "Premium Member" : "Free Member"}</h4>
-    ${
-      isActive
-        ? `<p>You have access to all premium features!</p>
-         <button class="btn btn-secondary" id="cancel-subscription">Cancel Subscription</button>`
-        : "<p>Upgrade to premium for unlimited access to all features.</p>"
-    }
+    <div class="current-status">
+      <h4>Current Status: ${planLabel}</h4>
+      ${
+        isActive
+          ? `<p>✅ You have access to all ${planLabel.includes("Premium") ? "premium" : "basic"} features!</p>
+             <p><strong>Plan:</strong> ${planLabel}</p>
+             <button class="btn btn-secondary" id="cancel-subscription">Cancel Subscription</button>`
+          : `<p>Upgrade for unlimited access to premium features.</p>
+             <p>• Unlimited AI assistant usage</p>
+             <p>• Access to all training modules</p>
+             <p>• Priority community support</p>`
+      }
+    </div>
   `;
 
   // Update plan cards
   document.querySelectorAll(".plan-card").forEach((card) => {
     const button = card.querySelector(".btn");
-    const planType = button?.dataset.plan;
+    const cardPlanType = button?.dataset.plan;
 
-    if (isActive && planType === "premium") {
-      button.textContent = "Current Plan";
+    if (isActive && planType === cardPlanType) {
+      button.textContent = "✅ Current Plan";
       button.disabled = true;
       button.className = "btn btn-secondary";
-    } else if (!isActive && planType === "premium") {
+    } else if (isActive && cardPlanType === "free") {
+      button.textContent = "Downgrade";
+      button.disabled = true; // disable downgrade for now
+      button.className = "btn btn-secondary";
+    } else {
       button.textContent = "Subscribe Now";
       button.disabled = false;
       button.className = "btn";
     }
   });
 
-  // Add cancel subscription handler
+  // Cancel subscription handler
   const cancelBtn = document.getElementById("cancel-subscription");
   if (cancelBtn) {
     cancelBtn.addEventListener("click", async () => {
-      if (confirm("Are you sure you want to cancel your subscription?")) {
+      if (confirm("Are you sure you want to cancel your subscription? You will lose access to premium features.")) {
+        showLoading(cancelBtn);
         try {
           await API.cancelSubscription();
           if (currentUser) {
             currentUser.subscriptionStatus = "free";
-            currentUser.subscriptionPlan = null;
+            currentUser.subscriptionPlan = "free";
+            UTILS.saveToLocal("user_data", currentUser);
           }
           updateSubscriptionUI();
+          updateDashboardStats();
+          UTILS.showNotification("Subscription cancelled successfully.", "info");
         } catch (error) {
           console.error("Cancel subscription error:", error);
+          UTILS.showNotification("Failed to cancel subscription: " + error.message, "error");
+        } finally {
+          hideLoading(cancelBtn);
         }
       }
     });
@@ -1992,7 +2064,7 @@ function updateSubscriptionUI() {
 }
 
 // Add subscription requirement check for premium features
-function checkSubscriptionAccess(featureName) {
+function requirePremiumAccess(featureName, callback) {
   if (!currentUser || currentUser.subscriptionStatus !== "active") {
     UTILS.showNotification(
       `${featureName} requires a premium subscription. Please upgrade to access this feature.`,
@@ -2000,6 +2072,10 @@ function checkSubscriptionAccess(featureName) {
     );
     showSection("subscription");
     return false;
+  }
+  
+  if (callback && typeof callback === 'function') {
+    callback();
   }
   return true;
 }

@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Subscription Success</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div id="subscription-success" class="container">
+    <h2>Checking your subscription...</h2>
+    <p>Please wait while we confirm your payment.</p>
+  </div>
+
+  <!-- <script src="utils.js"></script> -->
+  <script src="config.js"></script>
+  <script src="script.js"></script>
+  <script>
+    (async function checkSubscription() {
+      const token = UTILS.getFromLocal("auth_token");
+      if (!token) {
+        document.getElementById("subscription-success").innerHTML = `
+          <h2>Login Required</h2>
+          <p>Please <a href="login.html">log in</a> to view your subscription.</p>
+        `;
+        return;
+      }
+
+      try {
+        // 👇 hit backend to get subscription status
+        const sub = await API.getMySubscription();
+
+        if (sub && sub.status === "active") {
+          // update local user
+          let currentUser = UTILS.getFromLocal("user_data") || {};
+          currentUser.subscriptionStatus = "active";
+          currentUser.subscriptionPlan = sub.plan;
+          UTILS.saveToLocal("user_data", currentUser);
+
+          document.getElementById("subscription-success").innerHTML = `
+            <h2>🎉 Subscription Activated!</h2>
+            <p>Your <strong>${sub.plan}</strong> plan is now active.</p>
+            <a href="dashboard.html" class="btn">Go to Dashboard</a>
+          `;
+        } else {
+          document.getElementById("subscription-success").innerHTML = `
+            <h2>Subscription Pending</h2>
+            <p>We’re still waiting for payment confirmation. Refresh this page in a few moments.</p>
+            <a href="dashboard.html" class="btn">Go to Dashboard</a>
+          `;
+        }
+      } catch (err) {
+        console.error("Error fetching subscription:", err);
+        document.getElementById("subscription-success").innerHTML = `
+          <h2>Error</h2>
+          <p>Could not confirm your subscription. Please try again later.</p>
+        `;
+      }
+    })();
+  </script>
+</body>
+</html>
