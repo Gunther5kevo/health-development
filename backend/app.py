@@ -19,7 +19,7 @@ app = Flask(__name__)
 
 
 INTASEND_SECRET_KEY = os.getenv("INTASEND_SECRET_KEY")
-API_BASE = "https://payment.intasend.com/api/v1"
+API_BASE = "https://api.intasend.com/api/v1"
 
 
 # Environment config
@@ -715,23 +715,17 @@ def create_subscription(current_user_id):
     try:
         data = request.get_json() or {}
         plan_id = data.get("plan")
-
         if not plan_id:
             return jsonify({"error": "Plan ID is required"}), 400
 
-        # 1️⃣ Get user profile
-        profiles = supabase_request(
-            "GET",
-            f"profiles?id=eq.{current_user_id}",
-            use_service_key=True
-        )
+        # 1) Get profile (by id column)
+        profiles = supabase_request("GET", f"profiles?id=eq.{current_user_id}", use_service_key=True)
         if not profiles:
             return jsonify({"error": "Profile not found"}), 404
-
         profile = profiles[0]
         customer_id = profile.get("intasend_customer_id")
 
-        # 2️⃣ If customer missing, create in IntaSend
+        # 2) Ensure IntaSend customer
         if not customer_id:
             fake_email = f"{current_user_id}@yourapp.local"
             fake_first = "User"
@@ -741,58 +735,55 @@ def create_subscription(current_user_id):
                 f"{API_BASE}/subscriptions-customers/",
                 headers={
                     "Authorization": f"Bearer {INTASEND_SECRET_KEY.strip()}",
-                    "Content-Type": "application/json"
+                    "Content-Type": "application/json",
+                    "Accept": "application/json",
                 },
-                json={
-                    "email": fake_email,
-                    "first_name": fake_first,
-                    "last_name": fake_last
-                }
+                json={"email": fake_email, "first_name": fake_first, "last_name": fake_last},
+                timeout=20,
             )
+            print("DEBUG create customer:", customer_resp.status_code, customer_resp.text)
 
-            print("DEBUG: Create customer response:", customer_resp.status_code, customer_resp.text)
-
-            if customer_resp.status_code != 200:
+            if customer_resp.status_code not in (200, 201):
                 return jsonify({"error": customer_resp.text}), customer_resp.status_code
 
             customer_id = customer_resp.json().get("customer_id")
-
-            # Save to Supabase
             supabase_request(
                 "PATCH",
                 f"profiles?id=eq.{current_user_id}",
                 {"intasend_customer_id": customer_id},
-                use_service_key=True
+                use_service_key=True,
             )
 
-        # 3️⃣ Create subscription in IntaSend
+        # 3) Create subscription
         payload = {
             "customer_id": customer_id,
             "plan_id": plan_id,
-            "reference": f"user-{current_user_id}-{datetime.now().timestamp()}",
+            "reference": f"user-{current_user_id}-{int(datetime.now().timestamp())}",
             "start_date": datetime.now().strftime("%Y-%m-%d"),
-            "redirect_url": "https://health-development.netlify.app/subscription-success.html"
+            "redirect_url": "https://health-development.netlify.app/index.html#subscription",
         }
-
-        print("DEBUG: Payload to IntaSend:", payload)
+        print("DEBUG subscription payload:", payload)
 
         resp = requests.post(
             f"{API_BASE}/subscriptions/",
             headers={
                 "Authorization": f"Bearer {INTASEND_SECRET_KEY.strip()}",
-                "Content-Type": "application/json"
+                "Content-Type": "application/json",
+                "Accept": "application/json",
             },
-            json=payload
+            json=payload,
+            timeout=20,
         )
+        print("DEBUG subscription response:", resp.status_code, resp.text)
 
-        print("DEBUG: Subscription response:", resp.status_code, resp.text)
-
-        if resp.status_code != 200:
-            return jsonify({"error": resp.text}), resp.status_code
+        if resp.status_code not in (200, 201):
+            # Helpful extra: surface IntaSend request id if provided
+            req_id = resp.headers.get("X-Request-ID") or resp.headers.get("X-INTASEND-REQUEST-ID")
+            return jsonify({"error": resp.text, "request_id": req_id}), resp.status_code
 
         sub = resp.json()
 
-        # 4️⃣ Save subscription in Supabase
+        # 4) Persist subscription (pending until webhook activates)
         supabase_request(
             "POST",
             "subscriptions",
@@ -802,22 +793,23 @@ def create_subscription(current_user_id):
                 "plan": plan_id,
                 "intasend_subscription_id": sub.get("subscription_id"),
                 "created_at": datetime.now(timezone.utc).isoformat(),
-                "updated_at": datetime.now(timezone.utc).isoformat()
+                "updated_at": datetime.now(timezone.utc).isoformat(),
             },
-            use_service_key=True
+            use_service_key=True,
         )
 
         return jsonify({
             "status": "pending",
             "plan": plan_id,
             "intasend_subscription_id": sub.get("subscription_id"),
-            "checkout_url": sub.get("setup_url"),
-            "user_id": current_user_id
+            "checkout_url": sub.get("setup_url"),  # redirect user here
+            "user_id": current_user_id,
         }), 200
 
     except Exception as e:
-        print(f"Subscription creation error: {e}")
+        print("Subscription creation error:", e)
         return jsonify({"error": str(e)}), 500
+
 
 @app.route("/api/payments/my-subscription", methods=["GET"])
 @token_required
