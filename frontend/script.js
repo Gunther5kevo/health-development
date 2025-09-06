@@ -1955,16 +1955,15 @@ async function handleSubscription(planId) {
       return;
     }
 
-    // fallback: if backend already activated subscription
-    if (currentUser) {
+    // If backend returned active directly (rare fallback)
+    if (data.status === "active" && currentUser) {
       currentUser.subscriptionStatus = "active";
       currentUser.subscriptionPlan = planId;
       UTILS.saveToLocal("user_data", currentUser);
+      updateSubscriptionUI();
+      updateDashboardStats();
+      UTILS.showNotification("Subscription activated successfully!", "success");
     }
-
-    updateSubscriptionUI();
-    updateDashboardStats();
-    UTILS.showNotification("Subscription activated successfully!", "success");
 
   } catch (error) {
     console.error("Subscription error:", error);
@@ -1980,6 +1979,41 @@ async function handleSubscription(planId) {
     if (button) hideLoading(button);
   }
 }
+
+async function checkSubscriptionStatus() {
+  try {
+    const token = UTILS.getFromLocal("auth_token");
+    if (!token) return;
+
+    const subscription = await API.getSubscriptionStatus(); 
+    // 👆 hits backend → reads from Supabase
+
+    if (subscription?.status === "active") {
+      currentUser.subscriptionStatus = "active";
+      currentUser.subscriptionPlan = subscription.plan;
+      UTILS.saveToLocal("user_data", currentUser);
+      updateSubscriptionUI();
+      updateDashboardStats();
+      UTILS.showNotification("🎉 Subscription activated!", "success");
+      return true;
+    }
+  } catch (e) {
+    console.error("Status check failed:", e);
+  }
+  return false;
+}
+
+async function pollUntilActive(interval = 5000, maxTries = 12) {
+  for (let i = 0; i < maxTries; i++) {
+    const ok = await checkSubscriptionStatus();
+    if (ok) break;
+    await new Promise((r) => setTimeout(r, interval));
+  }
+}
+
+document.addEventListener("DOMContentLoaded", () => {
+  pollUntilActive(); // start polling on success page
+});
 
 // Update the updateSubscriptionUI function
 function updateSubscriptionUI() {

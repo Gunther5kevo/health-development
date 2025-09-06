@@ -607,59 +607,76 @@ async checkDrugInteractions(drugs) {
 
 // ===== SUBSCRIPTION MANAGEMENT =====
 async createSubscription(planId) {
-  try {
-    const token = UTILS.getFromLocal("auth_token");
+    try {
+      const token = UTILS.getFromLocal("auth_token");
 
-    const result = await fetch(`${API_BASE}/payments/create-subscription`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${token}`,   // 🔑 important
-      },
-      body: JSON.stringify({ plan: planId }),
-    });
+      const result = await fetch(`${API_BASE}/payments/create-subscription`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`,   // 🔑 secure auth
+        },
+        body: JSON.stringify({ plan: planId }),
+      });
 
-    if (!result.ok) {
-      const errorData = await result.json();
-      throw new Error(errorData.error || "Subscription creation failed");
+      if (!result.ok) {
+        const errorData = await result.json();
+        throw new Error(errorData.error || "Subscription creation failed");
+      }
+
+      return await result.json(); // { checkout_url, subscription_id, status }
+    } catch (error) {
+      console.error("Failed to create subscription:", error);
+      throw error;
     }
+  },
 
-    return await result.json();
-  } catch (error) {
-    console.error("Failed to create subscription:", error);
-    throw error;
-  }
-},
-
-async getMySubscription() {
+  async getMySubscription() {
     const token = UTILS.getFromLocal("auth_token");
-    const resp = await fetch(`${CONFIG.API_BASE}/payments/my-subscription`, {
-      headers: { "Authorization": `Bearer ${token}` }
+    const resp = await fetch(`${API_BASE}/payments/my-subscription`, {
+      headers: { "Authorization": `Bearer ${token}` },
     });
     if (!resp.ok) throw new Error(await resp.text());
-    return resp.json();
+    return resp.json(); // subscription row from Supabase
   },
-  
-async getSubscriptionStatus() {
-  try {
-    return await this.get("/users/subscription-status");
-  } catch (error) {
-    console.error("Failed to get subscription status:", error);
-    throw error;
-  }
-},
 
-async cancelSubscription() {
-  try {
-    const result = await this.post("/payments/cancel-subscription");
-    UTILS.showNotification("Subscription cancelled successfully!", "success");
-    return result;
-  } catch (error) {
-    console.error("Failed to cancel subscription:", error);
-    UTILS.showNotification("Failed to cancel subscription: " + error.message, "error");
-    throw error;
-  }
-},
+  // ✅ Polling endpoint — backend reads Supabase
+  async getSubscriptionStatus() {
+    try {
+      const token = UTILS.getFromLocal("auth_token");
+      const resp = await fetch(`${API_BASE}/payments/subscription-status`, {
+        headers: { "Authorization": `Bearer ${token}` },
+      });
+      if (!resp.ok) throw new Error(await resp.text());
+      return resp.json(); // { status: "pending" | "active", plan: "R08NOK8", ... }
+    } catch (error) {
+      console.error("Failed to get subscription status:", error);
+      throw error;
+    }
+  },
+
+  async cancelSubscription() {
+    try {
+      const token = UTILS.getFromLocal("auth_token");
+      const result = await fetch(`${API_BASE}/payments/cancel-subscription`, {
+        method: "POST",
+        headers: { "Authorization": `Bearer ${token}` },
+      });
+
+      if (!result.ok) {
+        const err = await result.json();
+        throw new Error(err.error || "Cancel failed");
+      }
+
+      const data = await result.json();
+      UTILS.showNotification("Subscription cancelled successfully!", "success");
+      return data;
+    } catch (error) {
+      console.error("Failed to cancel subscription:", error);
+      UTILS.showNotification("Failed to cancel subscription: " + error.message, "error");
+      throw error;
+    }
+  },
 
   // ===== COMMUNITY FEATURES =====
 

@@ -8,6 +8,7 @@ from functools import wraps
 import requests
 import time
 import random
+import traceback
 import openai
 from openai import OpenAI
 
@@ -708,6 +709,12 @@ def list_plans(current_user_id):
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+PLAN_MAP = {
+    "free": "free",
+    "R08NOK8": "basic",    # IntaSend Basic plan
+    "B0X2DK5": "premium",  # IntaSend Premium plan
+}
+
 
 @app.route("/api/payments/create-subscription", methods=["POST"])
 @token_required
@@ -718,19 +725,40 @@ def create_subscription(current_user_id):
         if not plan_id:
             return jsonify({"error": "Plan ID is required"}), 400
 
-        # 1) Get profile (by id column)
-        profiles = supabase_request("GET", f"profiles?id=eq.{current_user_id}", use_service_key=True)
+        # Handle free plan
+        if plan_id == "free":
+            supabase_request(
+                "POST",
+                "subscriptions",
+                {
+                    "user_id": current_user_id,
+                    "status": "active",
+                    "plan": "free",
+                    "intasend_subscription_id": None,
+                    "created_at": datetime.now(timezone.utc).isoformat(),
+                    "updated_at": datetime.now(timezone.utc).isoformat(),
+                },
+                use_service_key=True,
+            )
+            return jsonify({
+                "status": "active",
+                "plan": "free",
+                "intasend_subscription_id": None,
+                "checkout_url": None,
+                "user_id": current_user_id,
+            }), 200
+
+        # For paid plans (basic, premium)
+        profiles = supabase_request(
+            "GET", f"profiles?id=eq.{current_user_id}", use_service_key=True
+        )
         if not profiles:
             return jsonify({"error": "Profile not found"}), 404
         profile = profiles[0]
         customer_id = profile.get("intasend_customer_id")
 
-        # 2) Ensure IntaSend customer
         if not customer_id:
             fake_email = f"{current_user_id}@yourapp.local"
-            fake_first = "User"
-            fake_last = str(current_user_id)[:8]
-
             customer_resp = requests.post(
                 f"{API_BASE}/subscriptions-customers/",
                 headers={
@@ -738,15 +766,17 @@ def create_subscription(current_user_id):
                     "Content-Type": "application/json",
                     "Accept": "application/json",
                 },
-                json={"email": fake_email, "first_name": fake_first, "last_name": fake_last},
+                json={
+                    "email": fake_email,
+                    "first_name": "User",
+                    "last_name": str(current_user_id)[:8],
+                },
                 timeout=20,
             )
-            print("DEBUG create customer:", customer_resp.status_code, customer_resp.text)
+            customer_resp.raise_for_status()
+            customer_data = customer_resp.json()
+            customer_id = customer_data.get("customer_id")
 
-            if customer_resp.status_code not in (200, 201):
-                return jsonify({"error": customer_resp.text}), customer_resp.status_code
-
-            customer_id = customer_resp.json().get("customer_id")
             supabase_request(
                 "PATCH",
                 f"profiles?id=eq.{current_user_id}",
@@ -754,16 +784,8 @@ def create_subscription(current_user_id):
                 use_service_key=True,
             )
 
-        # 3) Create subscription
-        payload = {
-            "customer_id": customer_id,
-            "plan_id": plan_id,
-            "reference": f"user-{current_user_id}-{int(datetime.now().timestamp())}",
-            "start_date": datetime.now().strftime("%Y-%m-%d"),
-            "redirect_url": "https://health-development.netlify.app/index.html#subscription",
-        }
-        print("DEBUG subscription payload:", payload)
-
+        # Create IntaSend subscription
+        payload = {"customer_id": customer_id, "plan_id": plan_id}
         resp = requests.post(
             f"{API_BASE}/subscriptions/",
             headers={
@@ -774,16 +796,9 @@ def create_subscription(current_user_id):
             json=payload,
             timeout=20,
         )
-        print("DEBUG subscription response:", resp.status_code, resp.text)
-
-        if resp.status_code not in (200, 201):
-            # Helpful extra: surface IntaSend request id if provided
-            req_id = resp.headers.get("X-Request-ID") or resp.headers.get("X-INTASEND-REQUEST-ID")
-            return jsonify({"error": resp.text, "request_id": req_id}), resp.status_code
-
+        resp.raise_for_status()
         sub = resp.json()
 
-        # 4) Persist subscription (pending until webhook activates)
         supabase_request(
             "POST",
             "subscriptions",
@@ -800,14 +815,41 @@ def create_subscription(current_user_id):
 
         return jsonify({
             "status": "pending",
-            "plan": plan_id,
+            "plan": PLAN_MAP.get(plan_id, plan_id),
             "intasend_subscription_id": sub.get("subscription_id"),
-            "checkout_url": sub.get("setup_url"),  # redirect user here
+            "checkout_url": sub.get("setup_url"),
             "user_id": current_user_id,
         }), 200
 
     except Exception as e:
-        print("Subscription creation error:", e)
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/payments/webhook", methods=["POST"])
+def intasend_webhook():
+    try:
+        event = request.get_json() or {}
+        print("DEBUG Webhook received:", event)
+
+        data = event.get("data") if "data" in event else event
+        sub_id = data.get("subscription_id")
+        status = data.get("status")
+
+        if sub_id and status:
+            supabase_request(
+                "PATCH",
+                f"subscriptions?intasend_subscription_id=eq.{sub_id}",
+                {
+                    "status": status.lower(),
+                    "updated_at": datetime.now(timezone.utc).isoformat(),
+                },
+                use_service_key=True,
+            )
+
+        return jsonify({"ok": True}), 200
+    except Exception as e:
+        traceback.print_exc()
         return jsonify({"error": str(e)}), 500
 
 
@@ -817,48 +859,67 @@ def get_my_subscription(current_user_id):
     subs = supabase_request(
         "GET",
         f"subscriptions?user_id=eq.{current_user_id}&order=created_at.desc&limit=1",
-        use_service_key=True
+        use_service_key=True,
     )
     if not subs:
         return jsonify({"status": "free"}), 200
-    return jsonify(subs[0]), 200
+
+    sub = subs[0]
+    return jsonify({
+        **sub,
+        "plan": PLAN_MAP.get(sub.get("plan"), sub.get("plan"))
+    }), 200
 
 
 @app.route("/api/payments/cancel-subscription", methods=["POST"])
 @token_required
 def cancel_subscription(current_user_id):
     try:
-        # 1. Find active subscription in Supabase
         subs = supabase_request(
             "GET",
             f"subscriptions?user_id=eq.{current_user_id}&status=eq.active",
-            use_service_key=True
+            use_service_key=True,
         )
-        if not subs or len(subs) == 0:
+        if not subs:
             return jsonify({"error": "No active subscription found"}), 404
 
         subscription = subs[0]
         intasend_id = subscription.get("intasend_subscription_id")
 
-        # 2. Cancel on IntaSend
-        if intasend_id:
-            resp = requests.post(
-                f"{API_BASE}/subscriptions/{intasend_id}/cancel/",
-                headers={"Authorization": f"Token {INTASEND_SECRET_KEY}"}
+        if not intasend_id:
+            supabase_request(
+                "PATCH",
+                "subscriptions",
+                {
+                    "status": "cancelled",
+                    "updated_at": datetime.now(timezone.utc).isoformat(),
+                },
+                params={"and": f"(user_id.eq.{current_user_id},status.eq.active)"},
+                use_service_key=True,
             )
-            if resp.status_code not in (200, 204):
-                print("IntaSend cancel error:", resp.text)
+            return jsonify({"message": "Free subscription cancelled"}), 200
 
-        # 3. Update Supabase status
+        resp = requests.post(
+            f"{API_BASE}/subscriptions/{intasend_id}/cancel/",
+            headers={
+                "Authorization": f"Bearer {INTASEND_SECRET_KEY.strip()}",
+                "Content-Type": "application/json",
+                "Accept": "application/json",
+            },
+            timeout=20,
+        )
+        if resp.status_code not in (200, 204):
+            print("IntaSend cancel error:", resp.text)
+
         supabase_request(
             "PATCH",
             "subscriptions",
             {
                 "status": "cancelled",
-                "updated_at": datetime.now(timezone.utc).isoformat()
+                "updated_at": datetime.now(timezone.utc).isoformat(),
             },
             params={"and": f"(user_id.eq.{current_user_id},status.eq.active)"},
-            use_service_key=True
+            use_service_key=True,
         )
 
         return jsonify({"message": "Subscription cancelled successfully"}), 200
@@ -873,27 +934,29 @@ def cancel_subscription(current_user_id):
 def subscription_status(current_user_id):
     try:
         subs = supabase_request(
-            "GET", f"subscriptions?user_id=eq.{current_user_id}&status=eq.active",
-            use_service_key=True
+            "GET",
+            f"subscriptions?user_id=eq.{current_user_id}&status=eq.active",
+            use_service_key=True,
         )
-
-        if not subs or len(subs) == 0:
+        if not subs:
             return jsonify({"status": "inactive"}), 200
 
         subscription = subs[0]
+        plan_id = subscription.get("plan", "free")
         return jsonify({
             "status": "active",
             "subscription": {
                 "id": subscription.get("id"),
-                "plan": subscription.get("plan", "premium"),
+                "plan": PLAN_MAP.get(plan_id, plan_id),
                 "created_at": subscription.get("created_at"),
-                "intasend_subscription_id": subscription.get("intasend_subscription_id")
-            }
+                "intasend_subscription_id": subscription.get("intasend_subscription_id"),
+            },
         }), 200
 
     except Exception as e:
         print(f"Subscription status error: {e}")
         return jsonify({"status": "inactive", "error": str(e)}), 200
+
 
 # Training modules list
 @app.route('/api/training/modules', methods=['GET'])
