@@ -1366,18 +1366,24 @@ async function loadSuccessStories() {
           stories.stories && stories.stories.length > 0
             ? stories.stories
                 .map(
-                  (story) => `
-          <div class="story-card">
+                  (story, index) => {
+                    const fullStory = UTILS.sanitizeHtml(story.story);
+                    const isLong = fullStory.length > 200;
+                    const excerpt = isLong ? UTILS.truncateText(fullStory, 200) : fullStory;
+                    
+                    return `
+          <div class="story-card" data-story-id="${story.id || index}">
             <h4>${UTILS.sanitizeHtml(story.title)}</h4>
             <p class="story-meta">By ${
               story.profiles?.name || "Anonymous"
             } • ${UTILS.formatDate(story.created_at)}</p>
-            <p class="story-excerpt">${UTILS.truncateText(
-              UTILS.sanitizeHtml(story.story),
-              200
-            )}</p>
+            <div class="story-content">
+              <p class="story-excerpt" ${isLong ? 'data-full-text="' + fullStory.replace(/"/g, '&quot;') + '"' : ''}>${excerpt}</p>
+              ${isLong ? '<button class="btn btn-small read-more-btn" data-action="read-more">Read More</button>' : ''}
+            </div>
           </div>
-        `
+        `;
+                  }
                 )
                 .join("")
             : '<p class="no-content">No success stories yet. Share your inspiring story!</p>'
@@ -1389,6 +1395,25 @@ async function loadSuccessStories() {
     if (submitBtn) {
       submitBtn.addEventListener("click", showSubmitStoryForm);
     }
+
+    // Add event listeners for read more buttons
+    content.addEventListener('click', (e) => {
+      if (e.target.classList.contains('read-more-btn')) {
+        const storyCard = e.target.closest('.story-card');
+        const excerptEl = storyCard.querySelector('.story-excerpt');
+        const fullText = excerptEl.dataset.fullText;
+        
+        if (e.target.textContent === 'Read More') {
+          excerptEl.innerHTML = fullText;
+          e.target.textContent = 'Read Less';
+        } else {
+          const truncated = UTILS.truncateText(fullText, 200);
+          excerptEl.innerHTML = truncated;
+          e.target.textContent = 'Read More';
+        }
+      }
+    });
+
   } catch (error) {
     console.error("Error loading success stories:", error);
     throw error;
@@ -1401,35 +1426,89 @@ async function loadLocalEvents() {
   try {
     const events = await API.getLocalEvents();
 
-    content.innerHTML = `
-      <div class="events-header">
-        <h3>Local Events</h3>
-        <button class="btn" id="create-event-btn">Create Event</button>
-      </div>
-      <div id="events-list" class="events-list">
-        ${
-          events.events && events.events.length > 0
-            ? events.events
-                .map(
-                  (event) => `
-          <div class="event-card">
-            <h4>${UTILS.sanitizeHtml(event.title)}</h4>
-            <p class="event-meta">
-              📅 ${UTILS.formatDate(event.event_date)}
-              ${event.event_time ? `🕒 ${event.event_time}` : ""}
-              📍 ${UTILS.sanitizeHtml(event.location || "Location TBD")}
-            </p>
-            <p class="event-description">${UTILS.sanitizeHtml(
-              event.description || ""
-            )}</p>
+    if (events.events && events.events.length > 0) {
+      const currentDate = new Date();
+      currentDate.setHours(0, 0, 0, 0); // Reset time for accurate date comparison
+      
+      // Separate events into upcoming and previous
+      const upcomingEvents = events.events.filter(event => {
+        const eventDate = new Date(event.event_date);
+        eventDate.setHours(0, 0, 0, 0);
+        return eventDate >= currentDate;
+      });
+      
+      const previousEvents = events.events.filter(event => {
+        const eventDate = new Date(event.event_date);
+        eventDate.setHours(0, 0, 0, 0);
+        return eventDate < currentDate;
+      });
+
+      content.innerHTML = `
+        <div class="events-header">
+          <h3>Local Events</h3>
+          <button class="btn" id="create-event-btn">Create Event</button>
+        </div>
+        
+        <div class="events-sections">
+          <!-- Upcoming Events Section -->
+          <div class="events-section">
+            <h4>Upcoming Events (${upcomingEvents.length})</h4>
+            <div id="upcoming-events-list" class="events-list">
+              ${upcomingEvents.length > 0 
+                ? upcomingEvents.map(event => `
+                  <div class="event-card upcoming">
+                    <h4>${UTILS.sanitizeHtml(event.title)}</h4>
+                    <p class="event-meta">
+                      📅 ${UTILS.formatDate(event.event_date)}
+                      ${event.event_time ? `🕒 ${event.event_time}` : ""}
+                      📍 ${UTILS.sanitizeHtml(event.location || "Location TBD")}
+                    </p>
+                    <p class="event-description">${UTILS.sanitizeHtml(event.description || "")}</p>
+                    <div class="event-actions">
+                      <button class="btn btn-small" onclick="joinEvent(${event.id || 'null'})">Join Event</button>
+                    </div>
+                  </div>
+                `).join("")
+                : '<p class="no-content">No upcoming events. Create one for your community!</p>'
+              }
+            </div>
           </div>
-        `
-                )
-                .join("")
-            : '<p class="no-content">No upcoming events. Create one for your community!</p>'
-        }
-      </div>
-    `;
+
+          <!-- Previous Events Section -->
+          ${previousEvents.length > 0 ? `
+          <div class="events-section">
+            <h4>Previous Events (${previousEvents.length})</h4>
+            <div id="previous-events-list" class="events-list">
+              ${previousEvents.map(event => `
+                <div class="event-card previous">
+                  <h4>${UTILS.sanitizeHtml(event.title)}</h4>
+                  <p class="event-meta">
+                    📅 ${UTILS.formatDate(event.event_date)}
+                    ${event.event_time ? `🕒 ${event.event_time}` : ""}
+                    📍 ${UTILS.sanitizeHtml(event.location || "Location TBD")}
+                  </p>
+                  <p class="event-description">${UTILS.sanitizeHtml(event.description || "")}</p>
+                  <div class="event-status">
+                    <span class="status-badge completed">Event Completed</span>
+                  </div>
+                </div>
+              `).join("")}
+            </div>
+          </div>
+          ` : ''}
+        </div>
+      `;
+    } else {
+      content.innerHTML = `
+        <div class="events-header">
+          <h3>Local Events</h3>
+          <button class="btn" id="create-event-btn">Create Event</button>
+        </div>
+        <div id="events-list" class="events-list">
+          <p class="no-content">No events yet. Create one for your community!</p>
+        </div>
+      `;
+    }
 
     const createBtn = document.getElementById("create-event-btn");
     if (createBtn) {
@@ -2521,6 +2600,9 @@ document.addEventListener("DOMContentLoaded", () => {
 window.viewPost = viewPost;
 window.loadCommunitySection = loadCommunitySection;
 window.joinEvent = joinEvent;
+window.navigateToTraining = navigateToTraining;
+window.showEmergencyProtocols = showEmergencyProtocols;
+window.showSection = showSection;
 
 // -----------------------
 // Forum Function (compatibility)
