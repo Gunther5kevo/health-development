@@ -1,11 +1,109 @@
 // =======================
-// script.js (Fixed Navigation + Markdown Support + Enhanced Emergency Protocols)
+// script.js (Complete Updated Version with Plan-Aware Features)
 // =======================
 
 import { API, UTILS } from "./config.js";
 let currentUser = null;
 let userProgress = {};
 let navigationHistory = [];
+
+// -----------------------
+// Plan Configuration
+// -----------------------
+const PLANS = {
+  free: {
+    id: 'free',
+    name: 'Free Plan',
+    price: 0,
+    features: {
+      trainingModules: 3,
+      aiQuestionsPerDay: 5,
+      communityAccess: true,
+      basicSymptomChecker: true,
+      premiumModules: false,
+      unlimitedAI: false,
+      prioritySupport: false,
+      advancedAnalytics: false,
+      offlineAccess: false,
+      webinars: false
+    }
+  },
+  basic: {
+    id: 'R08NOK8',
+    name: 'Basic Plan',
+    price: 500,
+    features: {
+      trainingModules: 10,
+      aiQuestionsPerDay: 50,
+      communityAccess: true,
+      basicSymptomChecker: true,
+      premiumModules: true,
+      unlimitedAI: false,
+      prioritySupport: false,
+      advancedAnalytics: false,
+      offlineAccess: false,
+      webinars: false
+    }
+  },
+  premium: {
+    id: 'B0X2DK5',
+    name: 'Premium Plan',
+    price: 1000,
+    features: {
+      trainingModules: 15,
+      aiQuestionsPerDay: -1, // unlimited
+      communityAccess: true,
+      basicSymptomChecker: true,
+      premiumModules: true,
+      unlimitedAI: true,
+      prioritySupport: true,
+      advancedAnalytics: true,
+      offlineAccess: true,
+      webinars: true
+    }
+  }
+};
+
+// -----------------------
+// Plan Management Functions
+// -----------------------
+function getUserPlan() {
+  if (!currentUser || !currentUser.subscriptionStatus || currentUser.subscriptionStatus !== 'active') {
+    return PLANS.free;
+  }
+  
+  const planId = currentUser.subscriptionPlan;
+  return Object.values(PLANS).find(plan => plan.id === planId) || PLANS.free;
+}
+
+function hasFeatureAccess(featureName) {
+  const userPlan = getUserPlan();
+  return userPlan.features[featureName] || false;
+}
+
+function getRemainingAIQuestions() {
+  const userPlan = getUserPlan();
+  if (userPlan.features.aiQuestionsPerDay === -1) return -1; // unlimited
+  
+  const today = new Date().toDateString();
+  const usage = UTILS.getFromLocal(`ai_usage_${today}`) || 0;
+  return Math.max(0, userPlan.features.aiQuestionsPerDay - usage);
+}
+
+function trackAIUsage() {
+  const userPlan = getUserPlan();
+  if (userPlan.features.aiQuestionsPerDay === -1) return true; // unlimited
+  
+  const today = new Date().toDateString();
+  const currentUsage = UTILS.getFromLocal(`ai_usage_${today}`) || 0;
+  
+  if (currentUsage >= userPlan.features.aiQuestionsPerDay) {
+    return false; // limit reached
+  }
+  
+  UTILS.saveToLocal(`ai_usage_${today}`, currentUsage + 1);
+  return true;
+}
 
 // -----------------------
 // Tab Navigation (FIXED)
@@ -54,13 +152,10 @@ function showSection(sectionId, skipHistory = false) {
   }
 
   // Initialize section-specific content
-  if (
-    sectionId === "community" &&
-    !document.getElementById("community-content")
-  ) {
+  if (sectionId === "community" && !document.getElementById("community-content")) {
     initializeCommunity();
   } else if (sectionId === "ai-assistant" && !chatInitialized) {
-    initializeAIChat();
+    updateAIUsageDisplay();
   }
 
   trackPageView(sectionId);
@@ -85,7 +180,7 @@ async function initializeApp() {
 }
 
 // -----------------------
-// Training with Markdown Support
+// Training with Plan-Aware Module Loading
 // -----------------------
 async function loadTrainingModules() {
   try {
@@ -104,28 +199,40 @@ async function loadTrainingModules() {
 function updateTrainingSection(modules) {
   const trainingSection = document.getElementById("training");
   if (!trainingSection) return;
-  trainingSection.innerHTML = "";
-
-  modules.forEach((module) => {
-    const identifier = module?.id ?? module?.slug;
-    const card = document.createElement("div");
-    card.className = "card";
-    card.innerHTML = `
-      <h3>${module.title}</h3>
-      <p>${module.description || "Training module for health workers."}</p>
-      <div class="progress-bar">
-        <div class="progress-fill" style="width: ${
-          module.completed ? "100%" : "0%"
-        }"></div>
+  
+  const userPlan = getUserPlan();
+  const maxModules = userPlan.features.trainingModules;
+  
+  trainingSection.innerHTML = `
+    <div class="training-header">
+      <h2>Training Modules</h2>
+      <div class="plan-status">
+        <span class="plan-badge ${userPlan.id}">${userPlan.name}</span>
+        <span class="module-limit">Access: ${maxModules === -1 ? 'All' : maxModules} modules</span>
       </div>
-      <button class="btn"
-        data-module-id="${identifier ?? ""}"
-        data-module-slug="${module?.slug ?? ""}">
-        ${module.completed ? "✓ Completed" : "Start Module"}
-      </button>
-    `;
-    trainingSection.appendChild(card);
-  });
+    </div>
+    <div class="modules-grid">
+      ${modules.map((module, index) => {
+        const isLocked = index >= maxModules && maxModules !== -1;
+        const identifier = module?.id ?? module?.slug;
+        
+        return `
+          <div class="card module-card ${isLocked ? 'locked' : ''}">
+            ${isLocked ? '<div class="lock-overlay"><span class="lock-icon">🔒</span></div>' : ''}
+            <h3>${module.title}</h3>
+            <p>${module.description || "Training module for health workers."}</p>
+            <div class="progress-bar">
+              <div class="progress-fill" style="width: ${module.completed ? "100%" : "0%"}"></div>
+            </div>
+            ${isLocked 
+              ? '<button class="btn btn-secondary" data-action="upgrade-required">Upgrade Required</button>'
+              : `<button class="btn" data-module-id="${identifier ?? ""}" data-module-slug="${module?.slug ?? ""}">${module.completed ? "✓ Completed" : "Start Module"}</button>`
+            }
+          </div>
+        `;
+      }).join('')}
+    </div>
+  `;
 }
 
 async function startTrainingModule(button) {
@@ -156,7 +263,6 @@ async function startTrainingModule(button) {
     if (!res?.content) throw new Error("Module not found");
     showModule(res, identifier);
   } catch (error) {
-    // Use enhanced error handler
     if (!handleApiError(error, "Load training module")) {
       UTILS.showNotification("Error loading module: " + error.message, "error");
     }
@@ -238,7 +344,7 @@ function showModule(module, identifier = "") {
     history.back();
   });
 
-  // ✅ Simplified Mark Complete functionality (Option 1)
+  // Mark Complete functionality
   document
     .getElementById("mark-complete")
     ?.addEventListener("click", async () => {
@@ -305,67 +411,6 @@ function showModule(module, identifier = "") {
   document.getElementById("take-quiz")?.addEventListener("click", () => {
     showQuiz(module.quiz);
   });
-}
-
-async function markModuleCompleteWithStats(moduleId, moduleTitle, timeSpent = 2) {
-  const markCompleteBtn = document.getElementById("mark-complete");
-
-  const token = UTILS.getFromLocal("auth_token");
-  if (!token) {
-    UTILS.showNotification("Please log in to mark modules as complete.", "error");
-    setTimeout(() => {
-      window.location.href = "login.html";
-    }, 2000);
-    return;
-  }
-
-  markCompleteBtn.disabled = true;
-  markCompleteBtn.textContent = "Marking...";
-
-  try {
-    const success = await API.markModuleComplete(moduleId, moduleTitle);
-
-    if (success) {
-      // Update local state with more details
-      if (currentUser) {
-        currentUser.completedModules = (currentUser.completedModules || 0) + 1;
-        currentUser.progress = Math.round(
-          (currentUser.completedModules / currentUser.totalModules) * 100
-        );
-        currentUser.studyHours = (currentUser.studyHours || 0) + timeSpent;
-        currentUser.communityPoints = (currentUser.communityPoints || 0) + 10; // Reward points
-        
-        // Try to update study time on backend
-        try {
-          await API.updateStudyTime(moduleId, timeSpent);
-        } catch (error) {
-          console.log("Could not update study time:", error.message);
-        }
-        
-        updateUserInterface();
-        updateDashboardStats();
-      }
-
-      markCompleteBtn.innerHTML = "✓ Completed";
-      markCompleteBtn.classList.add("completed");
-      markCompleteBtn.disabled = true;
-
-      UTILS.showNotification(`Module completed! +10 points earned!`, "success");
-
-      setTimeout(() => {
-        showSection("training");
-        loadTrainingModules();
-      }, 2000);
-    } else {
-      throw new Error("Unable to mark module as complete. Please try again later.");
-    }
-  } catch (error) {
-    console.error("Mark complete error:", error);
-    const errorMessage = error?.message || "Unknown error occurred";
-    UTILS.showNotification(`Failed to mark as complete: ${errorMessage}`, "error");
-    markCompleteBtn.disabled = false;
-    markCompleteBtn.textContent = "Mark as Complete";
-  }
 }
 
 // -----------------------
@@ -509,7 +554,7 @@ function showEmergencyProtocols() {
 }
 
 // -----------------------
-// User Data
+// User Data Management
 // -----------------------
 async function loadUserData() {
   const token = UTILS.getFromLocal("auth_token");
@@ -665,7 +710,7 @@ async function refreshProfileFromBackend() {
       email: data.profile.email,
       progress: 0,
       completedModules: 0,
-      totalModules: 8, // can be dynamic if API supports
+      totalModules: 15, // Updated to match premium plan max
       studyHours: 0,
       communityPoints: 0,
       location: data.profile.location,
@@ -674,11 +719,11 @@ async function refreshProfileFromBackend() {
       joinedDate: data.profile.created_at,
     };
 
-    // 🔹 Fetch subscription status
+    // Fetch subscription status
     try {
       const subscriptionData = await API.getSubscriptionStatus();
       if (subscriptionData?.status) {
-        currentUser.subscriptionStatus = subscriptionData.status; // e.g. 'active', 'expired', 'canceled'
+        currentUser.subscriptionStatus = subscriptionData.status;
         currentUser.subscriptionPlan =
           subscriptionData.subscription?.plan || subscriptionData.plan || 'free';
         currentUser.subscriptionExpiry = subscriptionData.subscription?.expiry_date || null;
@@ -687,14 +732,18 @@ async function refreshProfileFromBackend() {
       console.warn("Could not fetch subscription status:", error.message);
     }
 
-    // 🔹 Fetch progress data
+    // Fetch progress data
     try {
       const progressData = await API.getProgress();
       if (progressData?.progress) {
         const completedModules = progressData.progress.filter(p => p.completed);
         currentUser.completedModules = completedModules.length;
+        
+        const userPlan = getUserPlan();
+        const maxModules = userPlan.features.trainingModules === -1 ? 15 : userPlan.features.trainingModules;
+        
         currentUser.progress = Math.round(
-          (currentUser.completedModules / currentUser.totalModules) * 100
+          (currentUser.completedModules / maxModules) * 100
         );
 
         // Example calculation for study hours
@@ -706,7 +755,7 @@ async function refreshProfileFromBackend() {
       console.warn("Could not fetch progress data:", error.message);
     }
 
-    // 🔹 Fetch community activity
+    // Fetch community activity
     try {
       const communityData = await API.getCommunityActivity();
       if (communityData) {
@@ -718,13 +767,13 @@ async function refreshProfileFromBackend() {
       console.warn("Could not fetch community data:", error.message);
     }
 
-    // 🔹 Update UI
+    // Update UI
     updateUserInterface();
     updateDashboardStats();
 
     // Update subscription-specific UI if it exists
     if (document.getElementById("subscription-status")) {
-      updateSubscriptionUI(currentUser);
+      updateSubscriptionUI();
     }
 
   } catch (error) {
@@ -732,7 +781,6 @@ async function refreshProfileFromBackend() {
     console.error("Profile refresh failed:", error.message);
   }
 }
-
 
 function updateDashboardStats() {
   if (!currentUser) {
@@ -777,15 +825,16 @@ function updateDashboardStats() {
   } else if (progress < 100) {
     message = "Almost complete! Push through to the finish line.";
   } else {
-    message = "Congratulations! You've completed all modules. Keep practicing!";
+    message = "Congratulations! You've completed all available modules. Keep practicing!";
   }
   updateStatElement("progress-message", message);
 
   // Update subscription status in dashboard if element exists
   const subscriptionBadge = document.querySelector(".subscription-badge");
   if (subscriptionBadge) {
-    subscriptionBadge.textContent = currentUser.subscriptionStatus === 'active' ? 'Premium' : 'Free';
-    subscriptionBadge.className = `subscription-badge ${currentUser.subscriptionStatus || 'free'}`;
+    const userPlan = getUserPlan();
+    subscriptionBadge.textContent = userPlan.name;
+    subscriptionBadge.className = `subscription-badge ${userPlan.id}`;
   }
 }
 
@@ -803,10 +852,8 @@ function updateUserInterface() {
   });
 }
 
-
-
 // -----------------------
-// AI Assistant
+// AI Assistant with Usage Limits
 // -----------------------
 let chatInitialized = false;
 
@@ -857,14 +904,23 @@ function initializeAIChat() {
 async function sendMessage(message) {
   if (!message.trim()) return;
 
-  const chatBox = document.getElementById("chat-box");
+  // Check AI usage limits
+  if (!trackAIUsage()) {
+    const userPlan = getUserPlan();
+    UTILS.showNotification(
+      `Daily AI question limit reached (${userPlan.features.aiQuestionsPerDay} questions). Upgrade for unlimited access!`,
+      "warning"
+    );
+    showUpgradePrompt('unlimitedAI');
+    return;
+  }
 
+  const chatBox = document.getElementById("chat-box");
   appendMessage("You", message, "user");
   document.getElementById("chat-message").value = "";
 
   try {
     appendMessage("AI", "⏳ Thinking...", "ai", true);
-
     const res = await API.chatWithAI(message);
     let reply = res.reply || "⚠️ Sorry, I could not generate a response.";
 
@@ -875,6 +931,11 @@ async function sendMessage(message) {
       appendMessage("Note", "⚠️ " + disclaimer.trim(), "disclaimer");
     }
     
+    // Show remaining questions for non-unlimited users
+    const remaining = getRemainingAIQuestions();
+    if (remaining !== -1 && remaining <= 5) {
+      appendMessage("System", `ℹ️ ${remaining} AI questions remaining today.`, "info");
+    }
     
     updateStatsOnAction('ai_chat_used');
     
@@ -903,6 +964,40 @@ function updateLastAIMessage(newText) {
     delete tempMsg.dataset.temp;
   } else {
     appendMessage("AI", newText, "ai");
+  }
+}
+
+// -----------------------
+// AI Usage Display
+// -----------------------
+function updateAIUsageDisplay() {
+  const aiSection = document.getElementById("ai-assistant");
+  if (!aiSection) return;
+
+  const userPlan = getUserPlan();
+  const remaining = getRemainingAIQuestions();
+  
+  let usageDisplay = aiSection.querySelector('.ai-usage-display');
+  if (!usageDisplay) {
+    usageDisplay = document.createElement('div');
+    usageDisplay.className = 'ai-usage-display';
+    aiSection.insertBefore(usageDisplay, aiSection.firstChild);
+  }
+
+  if (remaining === -1) {
+    usageDisplay.innerHTML = `
+      <div class="usage-info premium">
+        <span class="usage-badge unlimited">Unlimited AI Questions</span>
+      </div>
+    `;
+  } else {
+    const usageClass = remaining <= 2 ? 'critical' : remaining <= 5 ? 'warning' : 'normal';
+    usageDisplay.innerHTML = `
+      <div class="usage-info ${usageClass}">
+        <span class="usage-badge">${remaining} questions remaining today</span>
+        ${remaining <= 2 ? '<button class="btn btn-small upgrade-btn" data-action="upgrade-ai">Upgrade for Unlimited</button>' : ''}
+      </div>
+    `;
   }
 }
 
@@ -940,6 +1035,17 @@ function openSymptomChecker() {
         return;
       }
 
+      // Check AI usage limits for symptom checking
+      if (!trackAIUsage()) {
+        const userPlan = getUserPlan();
+        UTILS.showNotification(
+          `Daily AI question limit reached (${userPlan.features.aiQuestionsPerDay} questions). Upgrade for unlimited access!`,
+          "warning"
+        );
+        showUpgradePrompt('unlimitedAI');
+        return;
+      }
+
       const resultBox = document.getElementById("symptom-result");
       resultBox.innerHTML = "⏳ Analyzing symptoms...";
 
@@ -970,9 +1076,14 @@ function openSymptomChecker() {
 }
 
 // -----------------------
-// Drug Interaction Checker
+// Enhanced Drug Interaction Checker with Plan Restrictions
 // -----------------------
 function openDrugInteractionChecker() {
+  if (!hasFeatureAccess('premiumModules')) {
+    showFeatureRestricted('Advanced Drug Interaction Checker', 'basic');
+    return;
+  }
+  
   const aiSection = document.getElementById("ai-assistant");
   if (!aiSection) return;
 
@@ -980,7 +1091,8 @@ function openDrugInteractionChecker() {
   drugCard.className = "card";
   drugCard.id = "drug-checker-card";
   drugCard.innerHTML = `
-    <h3>Drug Interaction Checker</h3>
+    <h3>Advanced Drug Interaction Checker</h3>
+    <div class="premium-badge">Premium Feature</div>
     <p>Enter two or more drug names to check for possible interactions.</p>
     <textarea id="drug-input" rows="3" placeholder="e.g., ibuprofen, paracetamol, aspirin (separate with commas)"></textarea>
     <button id="check-drugs" class="btn">Check Interactions</button>
@@ -991,7 +1103,6 @@ function openDrugInteractionChecker() {
   // Hide existing cards and show drug checker
   const existingCards = aiSection.querySelectorAll(".card");
   existingCards.forEach((card) => (card.style.display = "none"));
-
   aiSection.appendChild(drugCard);
 
   document.getElementById("check-drugs").addEventListener("click", async () => {
@@ -1001,13 +1112,20 @@ function openDrugInteractionChecker() {
       return;
     }
 
-    const drugs = input
-      .split(",")
-      .map((d) => d.trim())
-      .filter(Boolean);
-
+    const drugs = input.split(",").map((d) => d.trim()).filter(Boolean);
     if (drugs.length < 2) {
       UTILS.showNotification("Please enter at least two drugs.", "warning");
+      return;
+    }
+
+    // Check AI usage limits for drug checking
+    if (!trackAIUsage()) {
+      const userPlan = getUserPlan();
+      UTILS.showNotification(
+        `Daily AI question limit reached (${userPlan.features.aiQuestionsPerDay} questions). Upgrade for unlimited access!`,
+        "warning"
+      );
+      showUpgradePrompt('unlimitedAI');
       return;
     }
 
@@ -1016,22 +1134,13 @@ function openDrugInteractionChecker() {
 
     try {
       const res = await API.checkDrugInteractions(drugs);
-
       resultBox.innerHTML = `
-        <div class="interaction-report">
-          <h4>Interaction Analysis:</h4>
-          <p><strong>Drugs checked:</strong> ${
-            res.drugs ? res.drugs.join(", ") : drugs.join(", ")
-          }</p>
+        <div class="interaction-report premium-content">
+          <h4>Advanced Interaction Analysis:</h4>
+          <p><strong>Drugs checked:</strong> ${res.drugs ? res.drugs.join(", ") : drugs.join(", ")}</p>
           <p><strong>Severity:</strong> ${res.severity || "Unknown"}</p>
-          <div class="analysis"><strong>Analysis:</strong><br>${
-            res.analysis || "No specific interactions found."
-          }</div>
-          <p class="timestamp"><em>Checked at ${
-            res.timestamp
-              ? UTILS.formatDate(res.timestamp)
-              : new Date().toLocaleString()
-          }</em></p>
+          <div class="analysis"><strong>Analysis:</strong><br>${res.analysis || "No specific interactions found."}</div>
+          <p class="timestamp"><em>Checked at ${res.timestamp ? UTILS.formatDate(res.timestamp) : new Date().toLocaleString()}</em></p>
           <p class="disclaimer"><strong>⚠️ Disclaimer:</strong> This is not professional medical advice. Always consult your healthcare provider before taking medications.</p>
         </div>
       `;
@@ -1040,13 +1149,60 @@ function openDrugInteractionChecker() {
     }
   });
 
-  // Close and return to main AI tools
-  document
-    .getElementById("close-drug-checker")
-    .addEventListener("click", () => {
-      drugCard.remove();
-      existingCards.forEach((card) => (card.style.display = "block"));
-    });
+  document.getElementById("close-drug-checker").addEventListener("click", () => {
+    drugCard.remove();
+    existingCards.forEach((card) => (card.style.display = "block"));
+  });
+}
+
+// -----------------------
+// Feature Restriction Handlers
+// -----------------------
+function showFeatureRestricted(featureName, requiredPlan) {
+  const planName = PLANS[requiredPlan]?.name || 'Premium Plan';
+  const modal = document.createElement("div");
+  modal.className = "restriction-modal";
+  modal.innerHTML = `
+    <div class="restriction-content">
+      <h3>🔒 Premium Feature</h3>
+      <p><strong>${featureName}</strong> requires a ${planName} subscription.</p>
+      <div class="upgrade-benefits">
+        <h4>Upgrade to unlock:</h4>
+        <ul>
+          ${requiredPlan === 'basic' ? `
+            <li>✓ 10 training modules</li>
+            <li>✓ 50 AI questions per day</li>
+            <li>✓ Advanced symptom checker</li>
+          ` : `
+            <li>✓ All 15+ training modules</li>
+            <li>✓ Unlimited AI assistant</li>
+            <li>✓ Advanced analytics</li>
+            <li>✓ Priority support</li>
+          `}
+        </ul>
+      </div>
+      <div class="modal-actions">
+        <button class="btn" data-plan="${PLANS[requiredPlan].id}">Upgrade Now - KES ${PLANS[requiredPlan].price}/month</button>
+        <button class="btn btn-secondary" id="close-restriction">Maybe Later</button>
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(modal);
+
+  modal.querySelector('[data-plan]').addEventListener('click', () => {
+    modal.remove();
+    handleSubscription(PLANS[requiredPlan].id);
+  });
+
+  document.getElementById('close-restriction').addEventListener('click', () => {
+    modal.remove();
+  });
+}
+
+function showUpgradePrompt(feature) {
+  const requiredPlan = feature === 'unlimitedAI' ? 'premium' : 'basic';
+  showFeatureRestricted('Unlimited AI Assistant', requiredPlan);
 }
 
 // -----------------------
@@ -1426,46 +1582,29 @@ function showCreatePostForm() {
       return;
     }
 
-      const submitBtn = document.getElementById("submit-post");
-  showLoading(submitBtn);
+    const submitBtn = document.getElementById("submit-post");
+    showLoading(submitBtn);
 
-  try {
-    await API.createForumPost({ title, content, category });
-    UTILS.showNotification("Post created successfully! +5 points earned!", "success");
-    
-    
-    updateStatsOnAction('post_created');
-    
-    loadCommunitySection("posts");
-  } catch (error) {
-    // Use enhanced error handler
-    if (!handleApiError(error, "Create post")) {
-      // Non-auth error, stay on form
-      UTILS.showNotification(
-        "Failed to create post: " + error.message,
-        "error"
-      );
+    try {
+      await API.createForumPost({ title, content, category });
+      UTILS.showNotification("Post created successfully! +5 points earned!", "success");
+      
+      updateStatsOnAction('post_created');
+      
+      loadCommunitySection("posts");
+    } catch (error) {
+      // Use enhanced error handler
+      if (!handleApiError(error, "Create post")) {
+        // Non-auth error, stay on form
+        UTILS.showNotification(
+          "Failed to create post: " + error.message,
+          "error"
+        );
+      }
+    } finally {
+      hideLoading(submitBtn);
     }
-  } finally {
-    hideLoading(submitBtn);
-  }
-});
-}
-
-async function addCommentWithSessionHandling(postId, content) {
-  try {
-    await API.addComment(postId, { content });
-    UTILS.showNotification("Comment added successfully!", "success");
-    viewPost(postId); // Reload the post
-  } catch (error) {
-    // Use enhanced error handler
-    if (!handleApiError(error, "Add comment")) {
-      UTILS.showNotification(
-        "Failed to add comment: " + error.message,
-        "error"
-      );
-    }
-  }
+  });
 }
 
 async function viewPost(postId) {
@@ -1520,50 +1659,49 @@ async function viewPost(postId) {
     commentForm.addEventListener("submit", async (e) => {
       e.preventDefault();
 
-        const content = document.getElementById("comment-content").value.trim();
+      const content = document.getElementById("comment-content").value.trim();
 
-  if (!content) {
-    UTILS.showNotification("Please enter a comment.", "warning");
-    return;
-  }
+      if (!content) {
+        UTILS.showNotification("Please enter a comment.", "warning");
+        return;
+      }
 
-  if (content.length < 5) {
-    UTILS.showNotification(
-      "Comment must be at least 5 characters long.",
-      "warning"
-    );
-    return;
-  }
+      if (content.length < 5) {
+        UTILS.showNotification(
+          "Comment must be at least 5 characters long.",
+          "warning"
+        );
+        return;
+      }
 
-  try {
-    await API.addComment(postId, { content });
-    UTILS.showNotification("Comment added successfully! +2 points earned!", "success");
-    
-    // ✅ ADD THIS LINE - Update stats when comment is added
-    updateStatsOnAction('comment_added');
-    
-    viewPost(postId); // Reload the post
-  } catch (error) {
-    console.error("Add comment error:", error);
-    if (
-      error.message.includes("Unauthorized") ||
-      error.message.includes("401")
-    ) {
-      UTILS.showNotification(
-        "Session expired, please log in again.",
-        "error"
-      );
-      setTimeout(() => {
-        window.location.href = "login.html";
-      }, 2000);
-    } else {
-      UTILS.showNotification(
-        "Failed to add comment: " + error.message,
-        "error"
-      );
-    }
-  }
-});
+      try {
+        await API.addComment(postId, { content });
+        UTILS.showNotification("Comment added successfully! +2 points earned!", "success");
+        
+        updateStatsOnAction('comment_added');
+        
+        viewPost(postId); // Reload the post
+      } catch (error) {
+        console.error("Add comment error:", error);
+        if (
+          error.message.includes("Unauthorized") ||
+          error.message.includes("401")
+        ) {
+          UTILS.showNotification(
+            "Session expired, please log in again.",
+            "error"
+          );
+          setTimeout(() => {
+            window.location.href = "login.html";
+          }, 2000);
+        } else {
+          UTILS.showNotification(
+            "Failed to add comment: " + error.message,
+            "error"
+          );
+        }
+      }
+    });
   } catch (error) {
     console.error("Error viewing post:", error);
     content.innerHTML = `<div class="error">Error loading post: ${error.message}</div>`;
@@ -1686,32 +1824,32 @@ function showSubmitStoryForm() {
     }
 
     const submitBtn = document.getElementById("submit-story");
-  showLoading(submitBtn);
+    showLoading(submitBtn);
 
-  try {
-    await API.submitSuccessStory({ title, story });
-    UTILS.showNotification(
-      "Success story submitted successfully! +10 points earned!",
-      "success"
-    );
-    
-    // ✅ ADD THIS LINE - Update stats when story is submitted
-    updateStatsOnAction('custom', 10); // 10 points for success story
-    
-    loadCommunitySection("stories");
-  } catch (error) {
-    // Use enhanced error handler
-    if (!handleApiError(error, "Submit story")) {
+    try {
+      await API.submitSuccessStory({ title, story });
       UTILS.showNotification(
-        "Failed to submit story: " + error.message,
-        "error"
+        "Success story submitted successfully! +10 points earned!",
+        "success"
       );
+      
+      updateStatsOnAction('custom', 10); // 10 points for success story
+      
+      loadCommunitySection("stories");
+    } catch (error) {
+      // Use enhanced error handler
+      if (!handleApiError(error, "Submit story")) {
+        UTILS.showNotification(
+          "Failed to submit story: " + error.message,
+          "error"
+        );
+      }
+    } finally {
+      hideLoading(submitBtn);
     }
-  } finally {
-    hideLoading(submitBtn);
-  }
-});
+  });
 }
+
 // -----------------------
 // Events Functions
 // -----------------------
@@ -1795,44 +1933,43 @@ function showCreateEventForm() {
     }
 
     const submitBtn = document.getElementById("submit-event");
-  showLoading(submitBtn);
+    showLoading(submitBtn);
 
-  try {
-    if (API.createEvent) {
-      await API.createEvent({
-        title,
-        description,
-        event_date,
-        event_time,
-        location,
-      });
-    } else {
-      await API.post("/community/events", {
-        title,
-        description,
-        event_date,
-        event_time,
-        location,
-      });
+    try {
+      if (API.createEvent) {
+        await API.createEvent({
+          title,
+          description,
+          event_date,
+          event_time,
+          location,
+        });
+      } else {
+        await API.post("/community/events", {
+          title,
+          description,
+          event_date,
+          event_time,
+          location,
+        });
+      }
+      UTILS.showNotification("Event created successfully! +8 points earned!", "success");
+      
+      updateStatsOnAction('custom', 8); // 8 points for creating event
+      
+      loadCommunitySection("events");
+    } catch (error) {
+      // Use enhanced error handler
+      if (!handleApiError(error, "Create event")) {
+        UTILS.showNotification(
+          "Failed to create event: " + error.message,
+          "error"
+        );
+      }
+    } finally {
+      hideLoading(submitBtn);
     }
-    UTILS.showNotification("Event created successfully! +8 points earned!", "success");
-    
-    // ✅ ADD THIS LINE - Update stats when event is created
-    updateStatsOnAction('custom', 8); // 8 points for creating event
-    
-    loadCommunitySection("events");
-  } catch (error) {
-    // Use enhanced error handler
-    if (!handleApiError(error, "Create event")) {
-      UTILS.showNotification(
-        "Failed to create event: " + error.message,
-        "error"
-      );
-    }
-  } finally {
-    hideLoading(submitBtn);
-  }
-});
+  });
 }
 
 function joinEvent(eventId) {
@@ -1928,8 +2065,9 @@ function showQuiz(quiz) {
     });
 }
 
-
-
+// -----------------------
+// Subscription Management
+// -----------------------
 async function handleSubscription(planId) {
   const token = UTILS.getFromLocal("auth_token");
   if (!token) {
@@ -1950,7 +2088,7 @@ async function handleSubscription(planId) {
     const data = await API.createSubscription(planId);
 
     if (data.checkout_url) {
-      // ✅ Redirect user to IntaSend checkout page
+      // Redirect user to IntaSend checkout page
       window.location.href = data.checkout_url;
       return;
     }
@@ -1986,7 +2124,6 @@ async function checkSubscriptionStatus() {
     if (!token) return;
 
     const subscription = await API.getSubscriptionStatus(); 
-    // 👆 hits backend → reads from Supabase
 
     if (subscription?.status === "active") {
       currentUser.subscriptionStatus = "active";
@@ -1994,7 +2131,7 @@ async function checkSubscriptionStatus() {
       UTILS.saveToLocal("user_data", currentUser);
       updateSubscriptionUI();
       updateDashboardStats();
-      UTILS.showNotification("🎉 Subscription activated!", "success");
+      UTILS.showNotification("Subscription activated!", "success");
       return true;
     }
   } catch (e) {
@@ -2011,41 +2148,32 @@ async function pollUntilActive(interval = 5000, maxTries = 12) {
   }
 }
 
-document.addEventListener("DOMContentLoaded", () => {
-  pollUntilActive(); // start polling on success page
-});
-
 // Update the updateSubscriptionUI function
 function updateSubscriptionUI() {
   const statusDiv = document.getElementById("subscription-status");
   if (!statusDiv) return;
 
+  const userPlan = getUserPlan();
   const isActive = currentUser?.subscriptionStatus === "active";
-  const planType = currentUser?.subscriptionPlan || "free";
 
-  let planLabel = "Free Member";
-  if (isActive && planType === "R08NOK8") {
-    planLabel = "Basic Member";
-  } else if (isActive && planType === "B0X2DK5") {
-    planLabel = "Premium Member";
-  }
-
-  statusDiv.className = `subscription-status ${
-    isActive ? "subscription-active" : "subscription-inactive"
-  }`;
-
+  statusDiv.className = `subscription-status ${isActive ? "subscription-active" : "subscription-inactive"}`;
   statusDiv.innerHTML = `
     <div class="current-status">
-      <h4>Current Status: ${planLabel}</h4>
-      ${
-        isActive
-          ? `<p>✅ You have access to all ${planLabel.includes("Premium") ? "premium" : "basic"} features!</p>
-             <p><strong>Plan:</strong> ${planLabel}</p>
-             <button class="btn btn-secondary" id="cancel-subscription">Cancel Subscription</button>`
-          : `<p>Upgrade for unlimited access to premium features.</p>
-             <p>• Unlimited AI assistant usage</p>
-             <p>• Access to all training modules</p>
-             <p>• Priority community support</p>`
+      <h4>Current Plan: ${userPlan.name}</h4>
+      ${isActive 
+        ? `<p>You have access to ${userPlan.name} features!</p>
+           <div class="plan-features">
+             <p><strong>Training Modules:</strong> ${userPlan.features.trainingModules === -1 ? 'Unlimited' : userPlan.features.trainingModules}</p>
+             <p><strong>AI Questions:</strong> ${userPlan.features.aiQuestionsPerDay === -1 ? 'Unlimited' : `${userPlan.features.aiQuestionsPerDay}/day`}</p>
+             <p><strong>Advanced Features:</strong> ${userPlan.features.premiumModules ? 'Yes' : 'No'}</p>
+           </div>
+           <button class="btn btn-secondary" id="cancel-subscription">Cancel Subscription</button>`
+        : `<p>You're on the free plan. Upgrade for more features!</p>
+           <div class="free-plan-limits">
+             <p>• 3 basic training modules</p>
+             <p>• 5 AI questions per day</p>
+             <p>• Basic community access</p>
+           </div>`
       }
     </div>
   `;
@@ -2055,13 +2183,13 @@ function updateSubscriptionUI() {
     const button = card.querySelector(".btn");
     const cardPlanType = button?.dataset.plan;
 
-    if (isActive && planType === cardPlanType) {
-      button.textContent = "✅ Current Plan";
+    if (isActive && userPlan.id === cardPlanType) {
+      button.textContent = "✓ Current Plan";
       button.disabled = true;
       button.className = "btn btn-secondary";
-    } else if (isActive && cardPlanType === "free") {
-      button.textContent = "Downgrade";
-      button.disabled = true; // disable downgrade for now
+    } else if (cardPlanType === "free" && !isActive) {
+      button.textContent = "Current Plan";
+      button.disabled = true;
       button.className = "btn btn-secondary";
     } else {
       button.textContent = "Subscribe Now";
@@ -2069,6 +2197,9 @@ function updateSubscriptionUI() {
       button.className = "btn";
     }
   });
+
+  // Update AI usage display
+  updateAIUsageDisplay();
 
   // Cancel subscription handler
   const cancelBtn = document.getElementById("cancel-subscription");
@@ -2211,17 +2342,15 @@ function navigateToTraining() {
 }
 
 // -----------------------
-// Event Listeners Setup
+// Enhanced Event Listeners Setup with Plan-Aware Features
 // -----------------------
 function setupEventListeners() {
   // Navigation tabs
-  document
-    .querySelectorAll(".nav-tab")
-    .forEach((tab) =>
-      tab.addEventListener("click", () => showSection(tab.dataset.section))
-    );
+  document.querySelectorAll(".nav-tab").forEach((tab) =>
+    tab.addEventListener("click", () => showSection(tab.dataset.section))
+  );
 
-  // General button handler (single place for all buttons)
+  // General button handler with plan-aware features
   document.body.addEventListener("click", (e) => {
     const btn = e.target.closest(".btn");
     if (!btn) return;
@@ -2229,12 +2358,23 @@ function setupEventListeners() {
     const txt = btn.textContent.trim();
     const action = btn.dataset.action;
 
+    // Handle upgrade requirements
+    if (action === "upgrade-required") {
+      showFeatureRestricted("Premium Training Modules", "basic");
+      return;
+    }
+
+    if (action === "upgrade-ai") {
+      showUpgradePrompt('unlimitedAI');
+      return;
+    }
+
+    // Module access with plan checking
     if (btn.dataset.moduleId || btn.dataset.moduleSlug) {
       startTrainingModule(btn);
       return;
     }
 
-    // Prefer data-action over text matching
     switch (action || txt) {
       case "continue-learning":
       case "Continue Learning":
@@ -2249,10 +2389,9 @@ function setupEventListeners() {
       case "ai-assistant":
       case "Ask AI Assistant":
         showSection("ai-assistant");
+        updateAIUsageDisplay();
         break;
 
-      // AI Tools
-      
       case "ai-chat":
       case "Start Chat with AI":
         showSection("ai-assistant");
@@ -2267,8 +2406,7 @@ function setupEventListeners() {
 
       case "drug-checker":
       case "Check Interactions":
-        showSection("ai-assistant");
-        openDrugInteractionChecker();
+        openDrugInteractionChecker(); // Now includes plan checking
         break;
 
       // Community
@@ -2371,6 +2509,20 @@ if ("serviceWorker" in navigator) {
 }
 
 // -----------------------
+// Initialization on DOM Content Loaded
+// -----------------------
+document.addEventListener("DOMContentLoaded", () => {
+  pollUntilActive(); // start polling on success page
+});
+
+// -----------------------
+// Global Function Exports for onclick handlers
+// -----------------------
+window.viewPost = viewPost;
+window.loadCommunitySection = loadCommunitySection;
+window.joinEvent = joinEvent;
+
+// -----------------------
 // Forum Function (compatibility)
 // -----------------------
 function openForum() {
@@ -2381,10 +2533,4 @@ function openForum() {
   loadCommunitySection("posts");
 }
 
-// -----------------------
-// Global Function Exports for onclick handlers
-// -----------------------
-window.viewPost = viewPost;
-window.loadCommunitySection = loadCommunitySection;
 window.openForum = openForum;
-window.joinEvent = joinEvent;
